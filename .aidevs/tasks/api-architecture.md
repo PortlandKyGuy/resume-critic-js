@@ -24,12 +24,13 @@ This document outlines the architecture for a sophisticated resume evaluation AP
 The Resume Evaluation API is a Node.js/Express application that provides comprehensive resume analysis through multiple specialized AI critics. Each critic evaluates different aspects of a resume against a job description, providing scores and detailed feedback.
 
 ### Key Features
-- **Multi-Critic Evaluation**: Ensemble of specialized critics (keyword, experience, impact, etc.)
+- **Multi-Critic Evaluation**: Ensemble of specialized critics evaluated in a single LLM call
 - **Industry-Specific Prompts**: Configurable prompts for different industries
-- **Multiple LLM Providers**: Support for OpenAI, Google Gemini, and Ollama
+- **Multiple LLM Providers**: Support for OpenAI, Google Gemini, and Ollama with mock support
 - **File Format Support**: PDF, DOCX, TXT, HTML processing
 - **Comprehensive Audit Trail**: Request/response logging and analytics
-- **Parallel Processing**: Concurrent critic execution for performance
+- **Batch Processing**: All critics evaluated in parallel within a single LLM request
+- **Functional Programming**: Immutable, composable functions throughout
 
 ## Core Architecture Principles
 
@@ -45,13 +46,14 @@ The Resume Evaluation API is a Node.js/Express application that provides compreh
 
 ### 3. Scalability
 - Stateless design for horizontal scaling
-- Configurable worker pools for parallel processing
-- Caching strategies for repeated evaluations
+- Batch evaluation for efficient LLM usage
+- Asynchronous job processing for long-running evaluations
 
 ### 4. Maintainability
-- Clear interfaces and contracts
+- Functional programming principles
 - Comprehensive error handling
 - Extensive logging and monitoring
+- Mock LLM support for development/testing
 
 ## Project Structure
 
@@ -71,11 +73,9 @@ resume-critic-js/
 │   │   │   ├── health.routes.js
 │   │   │   └── audit.routes.js
 │   │   ├── middleware/
-│   │   │   ├── auth.middleware.js
 │   │   │   ├── validation.middleware.js
 │   │   │   ├── error.middleware.js
-│   │   │   ├── audit.middleware.js
-│   │   │   └── rateLimit.middleware.js
+│   │   │   └── audit.middleware.js
 │   │   └── validators/
 │   │       ├── evaluation.validators.js
 │   │       ├── comparison.validators.js
