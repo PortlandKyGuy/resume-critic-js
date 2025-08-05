@@ -4,39 +4,6 @@ const { LLMProviderError } = require('../../utils/errors');
 const { logger } = require('../../utils/logger');
 
 /**
- * Create Google Gemini provider
- * @param {Object} config - Configuration object
- * @returns {Object} Gemini provider instance
- */
-const createGeminiProvider = (config = {}) => {
-  logger.debug('Gemini: Creating provider', {
-    hasApiKey: !!config.apiKey,
-    model: config.model,
-    temperature: config.temperature,
-    maxTokens: config.maxTokens
-  });
-
-  if (!config.apiKey) {
-    logger.error('Gemini: API key missing');
-    throw new Error('Google Gemini API key is required');
-  }
-
-  const genAI = new GoogleGenerativeAI(config.apiKey);
-
-  const model = config.model || 'gemini-pro';
-  const temperature = config.temperature || 0.7;
-  const maxTokens = config.maxTokens || 2000;
-
-  logger.info('Gemini: Provider initialized', { model, temperature, maxTokens });
-
-  return {
-    name: 'gemini',
-    model,
-    complete: createGeminiComplete(genAI, { model, temperature, maxTokens })
-  };
-};
-
-/**
  * Create Gemini complete function
  * @param {Object} genAI - Google GenerativeAI instance
  * @param {Object} defaults - Default options
@@ -44,7 +11,7 @@ const createGeminiProvider = (config = {}) => {
  */
 const createGeminiComplete = curry(async (genAI, defaults, options) => {
   const startTime = Date.now();
-  
+
   logger.debug('Gemini: Starting completion request', {
     hasSystem: !!options.system,
     userPromptLength: options.user?.length,
@@ -58,9 +25,11 @@ const createGeminiComplete = curry(async (genAI, defaults, options) => {
     });
 
     // Build prompt with system message if provided
-    let prompt = options.user;
+    const prompt = options.system
+      ? `${options.system}\n\n${options.user}`
+      : options.user;
+
     if (options.system) {
-      prompt = `${options.system}\n\n${options.user}`;
       logger.debug('Gemini: Combined system and user prompts', {
         combinedLength: prompt.length
       });
@@ -115,12 +84,12 @@ const createGeminiComplete = curry(async (genAI, defaults, options) => {
     // Check for safety or other finish reasons
     if (response.candidates && response.candidates[0]) {
       const candidate = response.candidates[0];
-      
+
       logger.debug('Gemini: Response candidate info', {
         finishReason: candidate.finishReason,
         safetyRatings: candidate.safetyRatings
       });
-      
+
       if (candidate.finishReason && candidate.finishReason !== 'STOP') {
         logger.warn('Gemini: Response blocked', {
           finishReason: candidate.finishReason,
@@ -151,7 +120,7 @@ const createGeminiComplete = curry(async (genAI, defaults, options) => {
     return text;
   } catch (error) {
     const duration = Date.now() - startTime;
-    
+
     logger.error('Gemini: Request failed', {
       duration,
       errorMessage: error.message,
@@ -166,6 +135,39 @@ const createGeminiComplete = curry(async (genAI, defaults, options) => {
     );
   }
 });
+
+/**
+ * Create Google Gemini provider
+ * @param {Object} config - Configuration object
+ * @returns {Object} Gemini provider instance
+ */
+const createGeminiProvider = (config = {}) => {
+  logger.debug('Gemini: Creating provider', {
+    hasApiKey: !!config.apiKey,
+    model: config.model,
+    temperature: config.temperature,
+    maxTokens: config.maxTokens
+  });
+
+  if (!config.apiKey) {
+    logger.error('Gemini: API key missing');
+    throw new Error('Google Gemini API key is required');
+  }
+
+  const genAI = new GoogleGenerativeAI(config.apiKey);
+
+  const model = config.model || 'gemini-pro';
+  const temperature = config.temperature || 0.7;
+  const maxTokens = config.maxTokens || 2000;
+
+  logger.info('Gemini: Provider initialized', { model, temperature, maxTokens });
+
+  return {
+    name: 'gemini',
+    model,
+    complete: createGeminiComplete(genAI, { model, temperature, maxTokens })
+  };
+};
 
 module.exports = {
   createGeminiProvider

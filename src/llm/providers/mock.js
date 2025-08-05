@@ -7,7 +7,9 @@ const { logger } = require('../../utils/logger');
  * @param {number} max - Maximum delay in ms
  * @returns {Promise} Delay promise
  */
-const simulateDelay = (min, max) => new Promise(resolve => setTimeout(resolve, Math.random() * (max - min) + min));
+const simulateDelay = (min, max) => new Promise(resolve => {
+  setTimeout(resolve, Math.random() * (max - min) + min);
+});
 
 /**
  * Find custom response based on prompt
@@ -109,7 +111,7 @@ const createMockComplete = curry(async (responses, options) => {
   const delayMin = 100;
   const delayMax = 300;
   const delay = Math.random() * (delayMax - delayMin) + delayMin;
-  
+
   logger.debug('Mock: Starting completion request', {
     hasSystem: !!options.system,
     userPromptLength: options.user?.length,
@@ -174,22 +176,26 @@ const createMockComplete = curry(async (responses, options) => {
  */
 const createMockProvider = (config = {}) => {
   const responses = config.responses || getDefaultResponses();
-  
+
   logger.debug('Mock: Creating provider', {
     hasCustomResponses: !!config.responses,
     responseCount: Object.keys(responses).length,
     model: 'mock-1.0'
   });
-  
+
   logger.info('Mock: Provider initialized', {
     model: 'mock-1.0',
     customResponseKeys: config.responses ? Object.keys(config.responses) : ['default responses']
   });
 
+  // Create a mutable responses object for testing purposes
+  const mutableResponses = { ...responses };
+
   return {
     name: 'mock',
     model: 'mock-1.0',
-    complete: createMockComplete(responses)
+    complete: createMockComplete(mutableResponses),
+    responses: mutableResponses // Expose for testing
   };
 };
 
@@ -202,7 +208,7 @@ const createMockProvider = (config = {}) => {
  */
 const setMockResponse = curry((provider, key, response) => {
   if (provider.name === 'mock' && provider.responses) {
-    // eslint-disable-next-line no-param-reassign
+    // eslint-disable-next-line no-param-reassign, fp/no-mutation
     provider.responses[key] = response;
     logger.debug('Mock: Response mapping updated', {
       key,

@@ -34,13 +34,13 @@ const getApiKey = providerName => {
 
   const envVarName = keyMap[providerName.toLowerCase()];
   const apiKey = envVarName ? process.env[envVarName] : undefined;
-  
+
   logger.debug('LLM: Retrieving API key', {
     provider: providerName,
     envVar: envVarName,
     hasKey: !!apiKey
   });
-  
+
   return apiKey;
 };
 
@@ -91,23 +91,27 @@ const selectProvider = config => {
     maxTokens: providerConfig.maxTokens
   });
 
-  let provider;
-  switch (providerName.toLowerCase()) {
-    case 'openai':
+  const providerFactories = {
+    openai: () => {
       logger.info('LLM: Creating OpenAI provider');
-      provider = createOpenAIProvider(providerConfig);
-      break;
-    case 'gemini':
+      return createOpenAIProvider(providerConfig);
+    },
+    gemini: () => {
       logger.info('LLM: Creating Gemini provider');
-      provider = createGeminiProvider(providerConfig);
-      break;
-    case 'ollama':
+      return createGeminiProvider(providerConfig);
+    },
+    ollama: () => {
       logger.info('LLM: Creating Ollama provider');
-      provider = createOllamaProvider(providerConfig);
-      break;
-    default:
-      throw new Error(`Unknown LLM provider: ${providerName}`);
+      return createOllamaProvider(providerConfig);
+    }
+  };
+
+  const factory = providerFactories[providerName.toLowerCase()];
+  if (!factory) {
+    throw new Error(`Unknown LLM provider: ${providerName}`);
   }
+
+  const provider = factory();
 
   logger.debug('LLM: Provider created', {
     name: provider.name,
@@ -124,21 +128,21 @@ const selectProvider = config => {
  */
 const createLLMClient = (config = {}) => {
   logger.debug('LLM: Creating LLM client', { config });
-  
+
   const provider = selectProvider(config);
-  
+
   const client = {
     provider: provider.name,
     model: provider.model,
     complete: withRetry(config.retry || {}, provider.complete)
   };
-  
+
   logger.info('LLM: Client created successfully', {
     provider: client.provider,
     model: client.model,
     hasRetry: !!config.retry
   });
-  
+
   return client;
 };
 
