@@ -1120,6 +1120,7 @@ CMD ["node", "src/app.js"]
 
 ### Phase 1: Core Infrastructure
 - [ ] Express app setup with functional middleware
+- [ ] Lint setup, configured, and passing
 - [ ] Basic routing structure with functional handlers
 - [ ] Error handling framework
 - [ ] Configuration management

@@ -1,0 +1,15 @@
+{
+  "server": {
+    "port": 8001
+  },
+  "llm": {
+    "useMock": true,
+    "provider": "mock"
+  },
+  "logging": {
+    "level": "error"
+  },
+  "audit": {
+    "enabled": false
+  }
+}
