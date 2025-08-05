@@ -1,4 +1,5 @@
 const { curry, pipe, compose, map, filter, reduce } = require('ramda');
+const { getMemoizeMaxSize } = require('./memoizeConfig');
 
 // eslint-disable-next-line fp/no-loops, no-restricted-syntax
 const pipeAsync = (...fns) => async x => {
@@ -33,14 +34,16 @@ const tryCatch = (fn, errorHandler) => async (...args) => {
   }
 };
 
-const memoize = (fn, maxSize = 100) => {
+const memoize = (fn, maxSize) => {
   const cache = new Map();
+  const configuredMaxSize = maxSize || getMemoizeMaxSize();
+
   return (...args) => {
     const key = JSON.stringify(args);
     if (cache.has(key)) return cache.get(key);
 
     // Prevent unbounded cache growth
-    if (cache.size >= maxSize) {
+    if (cache.size >= configuredMaxSize) {
       const firstKey = cache.keys().next().value;
       cache.delete(firstKey);
     }

@@ -7,9 +7,14 @@ const { logger } = require('./utils/logger');
 const { getConfig, validateConfig } = require('./utils/config');
 const { errorHandler, notFoundHandler } = require('./api/middleware/error.middleware');
 const { registerRoutes } = require('./api/routes');
+const { setMemoizeMaxSize } = require('./utils/memoizeConfig');
 
 const createApp = () => {
   validateConfig();
+
+  // Configure memoize max size from config
+  const memoizeMaxSize = getConfig('utils.memoize.maxSize', 100);
+  setMemoizeMaxSize(memoizeMaxSize);
 
   const app = express();
 
