@@ -1,0 +1,20 @@
+server:
+  port: 8000
+  cors:
+    origin:
+      - https://example.com
+    credentials: false
+
+llm:
+  useMock: false
+  provider: openai
+  model: gpt-4
+
+logging:
+  level: info
+  format: json
+
+audit:
+  enabled: true
+  storage: database
+  retentionDays: 90

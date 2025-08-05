@@ -1,11 +1,14 @@
 const request = require('supertest');
 const { createApp } = require('../../src/app');
+const { clearConfigCache } = require('../../src/utils/config');
 
 describe('App Integration Tests', () => {
   let app;
 
   beforeAll(() => {
     process.env.USE_MOCK_LLM = 'true';
+    process.env.NODE_ENV = 'test';
+    clearConfigCache(); // Clear any cached config
     app = createApp();
   });
 
