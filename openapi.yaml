@@ -1,0 +1,2220 @@
+openapi: 3.0.3
+info:
+  title: Resume Evaluation API
+  description: |
+    A sophisticated resume evaluation API using an ensemble of specialized AI critics. 
+    The system evaluates resumes against job descriptions through multiple perspectives, 
+    providing rich, actionable feedback.
+    
+    ## Key Features:
+    - **Standard Evaluation**: Single resume against job description
+    - **Comparison Evaluation**: Tailored vs original resume comparison
+    - **Fidelity Checking**: Truthfulness validation of tailored content
+    - **Comprehensive Evaluation**: Combined standard + fidelity in one request
+    - **Job-Fit Assessment**: Rapid compatibility check before full evaluation
+    - **Summary Evaluation**: Specialized evaluation for professional summaries
+    - **Cover Letter Evaluation**: Evaluate cover letters with resume context
+    - **Work Experience & Accomplishments Evaluation**: Specialized evaluations for specific sections
+    - **V2 Enhanced API**: Job-fit aware scoring with improvement recommendations
+    - **Audit System**: Comprehensive request/response logging and analytics
+    
+    ## Supported File Formats:
+    - PDF, DOCX, TXT, HTML (for file upload endpoints)
+    
+    ## LLM Providers:
+    - OpenAI (default)
+    - Google Gemini
+    - Ollama (local models)
+  version: 0.22.0
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Default development server
+  - url: http://0.0.0.0:3102
+    description: Custom configuration server
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Configuration
+    description: API configuration and settings management
+  - name: V1 Evaluation
+    description: Standard evaluation endpoints for resume analysis
+  - name: V2 Enhanced
+    description: Enhanced API with job-fit awareness and strategic recommendations
+  - name: Fidelity
+    description: Truthfulness validation between original and tailored content
+  - name: Specialized
+    description: Targeted evaluations for specific resume sections (summary, work experience, accomplishments)
+  - name: Audit
+    description: Request/response logging, analytics, and audit trail management
+
+paths:
+  /:
+    get:
+      summary: API Root
+      description: Provides a welcome message and basic API information
+      operationId: getRoot
+      tags:
+        - Configuration
+      security: []  # Public endpoint - no authentication required
+      responses:
+        200:
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Welcome message
+                    example: "Welcome to the Resume Evaluation API"
+                  version:
+                    type: string
+                    description: API version
+                    example: "0.22.0"
+                  documentation:
+                    type: string
+                    description: Link to API documentation
+                    example: "/docs"
+
+  /health:
+    get:
+      summary: Health Check
+      description: Check if the API service is running and healthy
+      operationId: healthCheck
+      tags:
+        - Configuration
+      security: []  # Public endpoint - no authentication required
+      responses:
+        200:
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy]
+                    description: Health status
+                    example: healthy
+                  timestamp:
+                    type: string
+                    format: date-time
+                    description: Current server time
+                    example: "2024-01-15T10:30:00Z"
+                  version:
+                    type: string
+                    description: API version
+                    example: "0.22.0"
+
+  /config:
+    get:
+      summary: Get Configuration
+      description: Get the current configuration settings including evaluation threshold and LLM settings
+      operationId: getConfig
+      tags:
+        - Configuration
+      responses:
+        200:
+          description: Current configuration settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  evaluation_threshold:
+                    type: number
+                    description: Pass/fail threshold (0-1)
+                    example: 0.75
+                  llm_provider:
+                    type: string
+                    description: Active LLM provider
+                    example: openai
+                  llm_model:
+                    type: string
+                    description: Active LLM model
+                    example: o4-mini
+                  llm_temperature:
+                    type: number
+                    description: LLM temperature setting
+                    example: 0.7
+                  process_markdown:
+                    type: boolean
+                    description: Whether markdown processing is enabled
+                    example: true
+                  max_parallel_workers:
+                    type: integer
+                    description: Maximum parallel critic workers
+                    example: 5
+                  version:
+                    type: string
+                    description: API version
+                    example: 0.22.0
+
+  /evaluate:
+    post:
+      summary: Evaluate Resume
+      description: Evaluate a resume against a job description using text input
+      operationId: evaluateResume
+      tags:
+        - V1 Evaluation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluationRequest'
+      responses:
+        200:
+          description: Evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationResponse'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /evaluate-files:
+    post:
+      summary: Evaluate Resume Files
+      description: |
+        Evaluate a resume against a job description using file uploads.
+        Supports multiple file formats: TXT, DOCX, PDF, HTML.
+      operationId: evaluateResumeFiles
+      tags:
+        - V1 Evaluation
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - job_description_file
+                - resume_file
+              properties:
+                job_description_file:
+                  type: string
+                  format: binary
+                  description: Job description file (TXT, DOCX, PDF, HTML)
+                resume_file:
+                  type: string
+                  format: binary
+                  description: Resume file (TXT, DOCX, PDF, HTML)
+                required_terms:
+                  type: string
+                  description: Comma-separated list of required terms
+                provider:
+                  type: string
+                  enum: [openai, ollama, gemini]
+                  default: openai
+                model:
+                  type: string
+                  default: o4-mini
+                temperature:
+                  type: number
+                  minimum: 0
+                  maximum: 2
+                  default: 0.7
+                process_markdown:
+                  type: boolean
+                  default: true
+                max_workers:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  default: 5
+      responses:
+        200:
+          description: Evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationResponse'
+        400:
+          description: Bad Request - Invalid file format or parsing error
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /compare:
+    post:
+      summary: Compare Resumes
+      description: Compare a tailored resume against the original resume and evaluate against a job description
+      operationId: compareResumes
+      tags:
+        - V1 Evaluation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComparisonRequest'
+      responses:
+        200:
+          description: Comparison results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonResponse'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /compare-files:
+    post:
+      summary: Compare Resume Files
+      description: |
+        Compare a tailored resume with the original resume and evaluate against a job description.
+        Supports multiple file formats: TXT, DOCX, PDF, HTML.
+      operationId: compareResumeFiles
+      tags:
+        - V1 Evaluation
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - job_description_file
+                - tailored_resume_file
+                - original_resume_file
+              properties:
+                job_description_file:
+                  type: string
+                  format: binary
+                  description: Job description file
+                tailored_resume_file:
+                  type: string
+                  format: binary
+                  description: Tailored resume file
+                original_resume_file:
+                  type: string
+                  format: binary
+                  description: Original resume file
+                required_terms:
+                  type: string
+                  description: Comma-separated list of required terms
+                provider:
+                  type: string
+                  enum: [openai, ollama, gemini]
+                  default: openai
+                model:
+                  type: string
+                  default: o4-mini
+                temperature:
+                  type: number
+                  minimum: 0
+                  maximum: 2
+                  default: 0.7
+                process_markdown:
+                  type: boolean
+                  default: true
+                max_workers:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  default: 5
+      responses:
+        200:
+          description: Comparison results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonResponse'
+        400:
+          description: Bad Request - Invalid file format or parsing error
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /evaluate-cover-letter:
+    post:
+      summary: Evaluate Cover Letter
+      description: Score a cover letter (with resume for context) on tone, personalization, etc.
+      operationId: evaluateCoverLetter
+      tags:
+        - V1 Evaluation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverLetterRequest'
+      responses:
+        200:
+          description: Cover letter evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverLetterResponse'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /evaluate/fidelity:
+    post:
+      summary: Evaluate Fidelity
+      description: Evaluate fidelity between original and tailored resumes with job context
+      operationId: evaluateFidelity
+      tags:
+        - Fidelity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FidelityRequest'
+      responses:
+        200:
+          description: Fidelity assessment results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FidelityResponse'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /evaluate/fidelity/resume-only:
+    post:
+      summary: Evaluate Resume Fidelity (Simple)
+      description: Resume-only fidelity check without job description context
+      operationId: evaluateFidelitySimple
+      tags:
+        - Fidelity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FidelitySimpleRequest'
+      responses:
+        200:
+          description: Simple fidelity assessment results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FidelityResponse'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /evaluate/fidelity/cover-letter:
+    post:
+      summary: Evaluate Cover Letter Fidelity
+      description: Check if a cover letter maintains fidelity to the resume
+      operationId: evaluateCoverLetterFidelity
+      tags:
+        - Fidelity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverLetterFidelityRequest'
+      responses:
+        200:
+          description: Cover letter fidelity assessment results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FidelityResponse'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /evaluate/comprehensive:
+    post:
+      summary: Comprehensive Evaluation
+      description: |
+        Perform comprehensive evaluation of a resume against a job description.
+        This endpoint combines standard evaluation with optional fidelity checking.
+      operationId: comprehensiveEvaluate
+      tags:
+        - V1 Evaluation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComprehensiveEvaluationRequest'
+      responses:
+        200:
+          description: Comprehensive evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComprehensiveEvaluationResponse'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /evaluate/job-fit:
+    post:
+      summary: Evaluate Job Fit
+      description: |
+        Perform rapid job fit assessment to determine fundamental candidate-job compatibility.
+        This lightweight endpoint evaluates whether a candidate is fundamentally qualified
+        for a position based on core requirements, experience level, and domain match.
+      operationId: evaluateJobFit
+      tags:
+        - Specialized
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluationRequest'
+      responses:
+        200:
+          description: Job fit assessment results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobFitResponse'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /evaluate/summary:
+    post:
+      summary: Evaluate Summary
+      description: |
+        Evaluate a tailored resume summary for job alignment, fidelity, impact, and effectiveness.
+        This endpoint assesses how well a tailored summary matches a job description
+        and the candidate's original experience using specialized summary critics.
+      operationId: evaluateSummary
+      tags:
+        - Specialized
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SummaryEvaluationRequest'
+      responses:
+        200:
+          description: Summary evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SummaryEvaluationResponse'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /evaluate/related-accomplishments:
+    post:
+      summary: Evaluate Related Accomplishments
+      description: |
+        Evaluate categorized related accomplishments for job alignment, impact, and effectiveness.
+        This endpoint assesses how well categorized accomplishments match a job description
+        and the candidate's original experience using specialized accomplishment critics.
+      operationId: evaluateRelatedAccomplishments
+      tags:
+        - Specialized
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RelatedAccomplishmentsEvaluationRequest'
+      responses:
+        200:
+          description: Accomplishments evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccomplishmentsEvaluationResponse'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /evaluate/work-experience:
+    post:
+      summary: Evaluate Work Experience
+      description: |
+        Evaluate work experience for job alignment, impact, and career progression.
+        This endpoint assesses how well work experience matches a job description
+        using specialized work experience critics.
+      operationId: evaluateWorkExperience
+      tags:
+        - Specialized
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkExperienceEvaluationRequest'
+      responses:
+        200:
+          description: Work experience evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkExperienceEvaluationResponse'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /v2/evaluate:
+    post:
+      summary: Evaluate Resume (V2)
+      description: |
+        API v2: Enhanced evaluation with job-fit awareness and improvement recommendations.
+        
+        This endpoint provides:
+        - Separate quality and job-fit scores
+        - Fidelity-aware thresholds  
+        - Clear should_improve signal
+        - Strategic guidance on HOW to improve
+        - Backward compatible with v1 response structure
+        
+        Important:
+        - Job-fit score measures fundamental candidate-job compatibility
+        - It's calculated from the original resume when provided
+        - Without original resume, job-fit uses the provided resume (less accurate)
+      operationId: evaluateResumeV2
+      tags:
+        - V2 Enhanced
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluationRequestV2'
+      responses:
+        200:
+          description: Enhanced evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationResponseV2'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /v2/evaluate/cover-letter:
+    post:
+      summary: Evaluate Cover Letter (V2)
+      description: |
+        API v2: Enhanced cover letter evaluation with job-fit awareness.
+        
+        This endpoint provides:
+        - Separate quality and job-fit scores
+        - Job-fit adjusted composite scoring
+        - Strategic improvement recommendations
+        - Requires original resume for accurate job-fit assessment
+        
+        The scoring logic:
+        - Quality score: Weighted average of cover letter critics
+        - Job-fit score: Evaluates candidate-job compatibility using original resume
+        - Composite score: Quality score × job-fit adjustment factor
+      operationId: evaluateCoverLetterV2
+      tags:
+        - V2 Enhanced
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverLetterRequestV2'
+      responses:
+        200:
+          description: Enhanced cover letter evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverLetterResponseV2'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /audit/logs/{audit_id}:
+    get:
+      summary: Get Audit Log
+      description: Get a specific audit log entry by ID
+      operationId: getAuditLog
+      tags:
+        - Audit
+      parameters:
+        - name: audit_id
+          in: path
+          required: true
+          description: Unique audit entry ID
+          schema:
+            type: string
+      responses:
+        200:
+          description: Audit entry details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEntry'
+        404:
+          $ref: '#/components/responses/NotFound'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /audit/logs:
+    get:
+      summary: Query Audit Logs
+      description: Query audit logs with various filters
+      operationId: queryAuditLogs
+      tags:
+        - Audit
+      parameters:
+        - name: start_date
+          in: query
+          description: Start date for filtering
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          description: End date for filtering
+          schema:
+            type: string
+            format: date-time
+        - name: event_type
+          in: query
+          description: Event type to filter by
+          schema:
+            $ref: '#/components/schemas/AuditEventType'
+        - name: pass_status
+          in: query
+          description: Filter by pass/fail status
+          schema:
+            type: boolean
+        - name: error_occurred
+          in: query
+          description: Filter by error occurrence
+          schema:
+            type: boolean
+        - name: min_score
+          in: query
+          description: Minimum score filter
+          schema:
+            type: number
+            minimum: 0
+            maximum: 100
+        - name: max_score
+          in: query
+          description: Maximum score filter
+          schema:
+            type: number
+            minimum: 0
+            maximum: 100
+        - name: user_identifier
+          in: query
+          description: User identifier filter
+          schema:
+            type: string
+        - name: session_id
+          in: query
+          description: Session ID filter
+          schema:
+            type: string
+        - name: tags
+          in: query
+          description: Tags to filter by
+          schema:
+            type: array
+            items:
+              type: string
+        - name: limit
+          in: query
+          description: Maximum number of results
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: offset
+          in: query
+          description: Offset for pagination
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        200:
+          description: List of audit entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEntry'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /audit/stats:
+    get:
+      summary: Get Audit Statistics
+      description: Get statistics from audit logs
+      operationId: getAuditStats
+      tags:
+        - Audit
+      parameters:
+        - name: start_date
+          in: query
+          description: Start date for filtering
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          description: End date for filtering
+          schema:
+            type: string
+            format: date-time
+        - name: event_type
+          in: query
+          description: Event type to filter by
+          schema:
+            $ref: '#/components/schemas/AuditEventType'
+      responses:
+        200:
+          description: Audit statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditStats'
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /audit/cleanup:
+    post:
+      summary: Cleanup Old Logs
+      description: Delete audit logs older than specified days
+      operationId: cleanupAuditLogs
+      tags:
+        - Audit
+      parameters:
+        - name: days_to_keep
+          in: query
+          description: Number of days to keep audit logs
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 365
+            default: 30
+      responses:
+        200:
+          description: Cleanup results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Cleanup status message
+                  days_kept:
+                    type: integer
+                    description: Number of days kept
+        500:
+          $ref: '#/components/responses/ServerError'
+
+  /audit/export:
+    get:
+      summary: Export Audit Logs
+      description: Export audit logs in specified format
+      operationId: exportAuditLogs
+      tags:
+        - Audit
+      parameters:
+        - name: start_date
+          in: query
+          description: Start date for filtering
+          schema:
+            type: string
+            format: date-time
+        - name: end_date
+          in: query
+          description: End date for filtering
+          schema:
+            type: string
+            format: date-time
+        - name: format
+          in: query
+          description: Export format
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        200:
+          description: Exported audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    description: Number of entries exported
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEntry'
+            text/csv:
+              schema:
+                type: string
+                description: CSV formatted audit logs
+        500:
+          $ref: '#/components/responses/ServerError'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication. Required for all endpoints.
+  
+  responses:
+    ValidationError:
+      description: Validation Error - Invalid input provided
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - detail
+            properties:
+              detail:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    loc:
+                      type: array
+                      items:
+                        type: string
+                      description: Location of the error
+                    msg:
+                      type: string
+                      description: Error message
+                    type:
+                      type: string
+                      description: Error type
+              body:
+                type: string
+                description: Request body that caused the error
+            example:
+              detail:
+                - loc: ["body", "temperature"]
+                  msg: "ensure this value is less than or equal to 2"
+                  type: "value_error.number.not_le"
+              body: "{\"temperature\": 3.0}"
+    
+    ServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - detail
+            properties:
+              detail:
+                type: string
+                description: Error description
+              error_type:
+                type: string
+                description: Type of error
+              error_message:
+                type: string
+                description: Detailed error message
+              traceback:
+                type: string
+                description: Stack trace (only in debug mode)
+            example:
+              detail: "An unexpected error occurred"
+              error_type: "RuntimeError"
+              error_message: "Failed to connect to LLM provider"
+    
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - detail
+            properties:
+              detail:
+                type: string
+                description: Error message
+            example:
+              detail: "Audit entry not found"
+  
+  schemas:
+    EvaluationRequest:
+      type: object
+      required:
+        - job_description
+        - resume
+      properties:
+        job_description:
+          type: string
+          description: The job description to evaluate against
+          example: "We are seeking a Senior Software Engineer with 5+ years of experience in Python, FastAPI, and cloud technologies. The ideal candidate will have strong expertise in building scalable microservices and RESTful APIs."
+        resume:
+          type: string
+          description: The resume text to evaluate
+          example: "John Doe\nSenior Software Engineer\n\nExperience:\n- 7 years developing Python applications\n- Built microservices using FastAPI and Django\n- Deployed applications on AWS and Azure\n\nSkills: Python, FastAPI, Django, AWS, Docker, PostgreSQL"
+        required_terms:
+          type: string
+          description: Comma-separated list of required terms
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+          description: LLM provider
+        model:
+          type: string
+          default: o4-mini
+          description: LLM model to use
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 1
+          description: LLM temperature (0-2)
+        process_markdown:
+          type: boolean
+          default: true
+          description: Whether to process markdown in the resume before evaluation
+        max_workers:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 6
+          description: Maximum number of parallel critic workers (1-10)
+
+    ComparisonRequest:
+      type: object
+      required:
+        - job_description
+        - tailored_resume
+        - original_resume
+      properties:
+        job_description:
+          type: string
+          description: The job description to evaluate against
+        tailored_resume:
+          type: string
+          description: The tailored resume text
+        original_resume:
+          type: string
+          description: The original resume text
+        required_terms:
+          type: string
+          description: Comma-separated list of required terms
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+        model:
+          type: string
+          default: o4-mini
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.7
+          description: LLM temperature (0-1)
+        process_markdown:
+          type: boolean
+          default: true
+        max_workers:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+
+    CoverLetterRequest:
+      type: object
+      required:
+        - job_description
+        - cover_letter
+        - resume
+      properties:
+        job_description:
+          type: string
+          description: The job description
+        cover_letter:
+          type: string
+          description: The cover letter text
+        resume:
+          type: string
+          description: The resume text for context
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+        model:
+          type: string
+          default: o4-mini
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.7
+        process_markdown:
+          type: boolean
+          default: true
+        max_workers:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+
+    FidelityRequest:
+      type: object
+      required:
+        - job_description
+        - original_resume
+        - tailored_resume
+      properties:
+        job_description:
+          type: string
+          description: The job description
+        original_resume:
+          type: string
+          description: The original resume
+        tailored_resume:
+          type: string
+          description: The tailored resume
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+        model:
+          type: string
+          default: o4-mini
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 0.7
+
+    FidelitySimpleRequest:
+      type: object
+      required:
+        - original_resume
+        - tailored_resume
+      properties:
+        original_resume:
+          type: string
+          description: The original resume
+        tailored_resume:
+          type: string
+          description: The tailored resume
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+        model:
+          type: string
+          default: o4-mini
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 0.7
+
+    CoverLetterFidelityRequest:
+      type: object
+      required:
+        - original_resume
+        - cover_letter
+      properties:
+        original_resume:
+          type: string
+          description: The original resume
+        cover_letter:
+          type: string
+          description: The cover letter to check
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+        model:
+          type: string
+          default: o4-mini
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 0.7
+
+    ComprehensiveEvaluationRequest:
+      type: object
+      required:
+        - job_description
+        - tailored_resume
+      properties:
+        job_description:
+          type: string
+          description: The job description to evaluate against
+        tailored_resume:
+          type: string
+          description: The tailored resume to evaluate
+        original_resume:
+          type: string
+          description: Original resume for fidelity checking (optional)
+        required_terms:
+          type: string
+          description: Comma-separated list of required terms to check
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+          description: LLM provider to use
+        model:
+          type: string
+          default: o4-mini
+          description: LLM model to use
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.7
+          description: LLM temperature (0.0 to 1.0)
+        process_markdown:
+          type: boolean
+          default: true
+          description: Whether to process markdown in the resume
+        max_workers:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+          description: Maximum number of parallel critic workers (1-10)
+
+    SummaryEvaluationRequest:
+      type: object
+      required:
+        - job_description
+        - original_resume
+        - tailored_summary
+      properties:
+        job_description:
+          type: string
+          description: The target job description
+        original_resume:
+          type: string
+          description: The candidate's original resume/experience
+        tailored_summary:
+          type: string
+          description: The tailored summary to evaluate
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+        model:
+          type: string
+          default: o4-mini
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.7
+        max_workers:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+
+    AccomplishmentCategory:
+      type: object
+      required:
+        - category
+        - items
+      properties:
+        category:
+          type: string
+          description: Category name (e.g., 'Technical Leadership')
+        items:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: List of accomplishments in this category
+
+    RelatedAccomplishments:
+      type: object
+      required:
+        - relatedAccomplishments
+      properties:
+        relatedAccomplishments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccomplishmentCategory'
+          minItems: 2
+          maxItems: 5
+          description: List of accomplishment categories
+
+    RelatedAccomplishmentsEvaluationRequest:
+      type: object
+      required:
+        - job_description
+        - original_resume
+        - related_accomplishments
+      properties:
+        job_description:
+          type: string
+          description: The target job description
+        original_resume:
+          type: string
+          description: The candidate's original resume/experience
+        related_accomplishments:
+          oneOf:
+            - $ref: '#/components/schemas/RelatedAccomplishments'
+            - type: array
+              items:
+                $ref: '#/components/schemas/AccomplishmentCategory'
+          description: The related accomplishments to evaluate
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+        model:
+          type: string
+          default: o4-mini
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 0.7
+        max_workers:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+
+    WorkExperience:
+      type: object
+      required:
+        - title
+        - company
+        - dates
+        - responsibilities
+      properties:
+        title:
+          type: string
+          description: Job title/position
+        company:
+          type: string
+          description: Company name
+        dates:
+          type: string
+          description: Employment dates (e.g., 'Jan 2020 - Present')
+        location:
+          type: string
+          description: Job location
+        responsibilities:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: List of responsibilities and achievements
+
+    WorkExperienceCollection:
+      type: object
+      required:
+        - experiences
+      properties:
+        experiences:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkExperience'
+          minItems: 1
+          description: List of work experiences in reverse chronological order
+
+    WorkExperienceEvaluationRequest:
+      type: object
+      required:
+        - job_description
+        - resume
+        - work_experience
+      properties:
+        job_description:
+          type: string
+          description: The target job description
+        resume:
+          type: string
+          description: The full resume text
+        work_experience:
+          oneOf:
+            - $ref: '#/components/schemas/WorkExperienceCollection'
+            - type: array
+              items:
+                $ref: '#/components/schemas/WorkExperience'
+            - type: object
+          description: The work experience to evaluate
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+        model:
+          type: string
+          default: o4-mini
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 0.7
+        max_workers:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+
+    EvaluationRequestV2:
+      type: object
+      required:
+        - job_description
+        - resume
+      properties:
+        job_description:
+          type: string
+          description: The job description to evaluate against
+        resume:
+          type: string
+          description: The resume to evaluate (typically the tailored version)
+        original_resume:
+          type: string
+          description: Original resume for job-fit and fidelity checking (required for accurate job-fit scoring)
+        required_terms:
+          type: string
+          description: Comma-separated list of required terms
+        job_fit_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Pre-calculated job-fit score (0.0-1.0). If provided, skips job-fit evaluation for consistency.
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+        model:
+          type: string
+          default: o4-mini
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 0.7
+        process_markdown:
+          type: boolean
+          default: true
+        max_workers:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 6
+
+    CoverLetterRequestV2:
+      type: object
+      required:
+        - job_description
+        - cover_letter
+        - original_resume
+      properties:
+        job_description:
+          type: string
+          description: The job description to evaluate against
+        cover_letter:
+          type: string
+          description: The cover letter to evaluate
+        original_resume:
+          type: string
+          description: Original resume for job-fit scoring (required)
+        job_fit_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Pre-calculated job-fit score (0.0-1.0). If provided, skips job-fit evaluation for consistency.
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+        model:
+          type: string
+          default: o4-mini
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 0.7
+        process_markdown:
+          type: boolean
+          default: true
+        max_workers:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 5
+
+    CriticResult:
+      type: object
+      properties:
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Critic score (0-100)
+        feedback:
+          type: string
+          description: Detailed feedback from the critic
+        execution_time:
+          type: number
+          description: Execution time in seconds
+
+    EvaluationResponse:
+      type: object
+      properties:
+        composite_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Overall evaluation score
+        pass:
+          type: boolean
+          description: Whether the resume passes the threshold
+        threshold:
+          type: number
+          description: The threshold used for pass/fail
+        results:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CriticResult'
+          description: Individual critic results
+        missing_requirements:
+          type: array
+          items:
+            type: string
+          description: List of missing required terms
+        jd_file:
+          type: string
+          description: Job description filename
+        resume_file:
+          type: string
+          description: Resume filename
+        llm_provider:
+          type: string
+          description: LLM provider used
+        llm_model:
+          type: string
+          description: LLM model used
+        llm_temperature:
+          type: number
+          description: LLM temperature used
+        process_markdown:
+          type: boolean
+          description: Whether markdown was processed
+        max_workers:
+          type: integer
+          description: Number of parallel workers used
+        execution_time:
+          type: number
+          description: Total execution time in seconds
+        version:
+          type: string
+          description: API version
+
+    ComparisonResponse:
+      type: object
+      properties:
+        standard_evaluation:
+          $ref: '#/components/schemas/EvaluationResponse'
+          description: Standard evaluation of the tailored resume
+        comparison_results:
+          type: object
+          properties:
+            improvements:
+              type: array
+              items:
+                type: string
+              description: List of improvements made
+            degradations:
+              type: array
+              items:
+                type: string
+              description: List of degradations found
+            net_improvement:
+              type: boolean
+              description: Whether there's overall improvement
+        quality_score:
+          type: number
+          description: Overall quality score
+        authenticity_score:
+          type: number
+          description: Truthfulness score
+        jd_file:
+          type: string
+        tailored_resume_file:
+          type: string
+        original_resume_file:
+          type: string
+        llm_provider:
+          type: string
+        llm_model:
+          type: string
+        llm_temperature:
+          type: number
+        process_markdown:
+          type: boolean
+        max_workers:
+          type: integer
+        execution_time:
+          type: number
+        version:
+          type: string
+
+    CoverLetterResponse:
+      type: object
+      properties:
+        composite_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Overall cover letter score
+        results:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CriticResult'
+          description: Individual critic results
+        llm_provider:
+          type: string
+        llm_model:
+          type: string
+        llm_temperature:
+          type: number
+        process_markdown:
+          type: boolean
+        max_workers:
+          type: integer
+        execution_time:
+          type: number
+        version:
+          type: string
+
+    FidelityResponse:
+      type: object
+      properties:
+        score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Fidelity score
+        feedback:
+          type: string
+          description: Detailed fidelity feedback
+        alignment_score:
+          type: number
+          description: How well changes align with job requirements
+        accuracy_score:
+          type: number
+          description: Truthfulness of the content
+        issues:
+          type: array
+          items:
+            type: string
+          description: List of fidelity issues found
+        llm_provider:
+          type: string
+        llm_model:
+          type: string
+        llm_temperature:
+          type: number
+        execution_time:
+          type: number
+        version:
+          type: string
+
+    ComprehensiveEvaluationResponse:
+      type: object
+      properties:
+        composite_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Overall evaluation score
+        pass:
+          type: boolean
+          description: Whether the resume passes the threshold
+        threshold:
+          type: number
+          description: The threshold used for pass/fail
+        comprehensive_pass:
+          type: boolean
+          description: Combined pass status including fidelity
+        results:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CriticResult'
+          description: Individual critic results
+        fidelity:
+          $ref: '#/components/schemas/FidelityResponse'
+          description: Fidelity check results (if original provided)
+        missing_requirements:
+          type: array
+          items:
+            type: string
+        jd_file:
+          type: string
+        tailored_resume_file:
+          type: string
+        original_resume_file:
+          type: string
+        llm_provider:
+          type: string
+        llm_model:
+          type: string
+        llm_temperature:
+          type: number
+        process_markdown:
+          type: boolean
+        max_workers:
+          type: integer
+        execution_time:
+          type: number
+        version:
+          type: string
+
+    JobFitResponse:
+      type: object
+      properties:
+        job_fit_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Job fit score (0.0-1.0)
+        match_category:
+          type: string
+          enum: [excellent, good, fair, poor]
+          description: Categorized match level
+        recommendation:
+          type: string
+          enum: [proceed_with_full_evaluation, proceed_with_caution, do_not_proceed]
+          description: Recommendation for next steps
+        key_gaps:
+          type: array
+          items:
+            type: string
+          description: List of fundamental missing requirements
+        transferable_strengths:
+          type: array
+          items:
+            type: string
+          description: List of relevant transferable skills
+        execution_time:
+          type: number
+        llm_provider:
+          type: string
+        llm_model:
+          type: string
+        llm_temperature:
+          type: number
+        version:
+          type: string
+
+    SummaryEvaluationResponse:
+      type: object
+      properties:
+        composite_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Overall summary effectiveness (0-100)
+        relevance_score:
+          type: number
+          description: Job alignment score
+        fidelity_score:
+          type: number
+          description: Truthfulness to original experience
+        impact_score:
+          type: number
+          description: Persuasiveness and first impression
+        conciseness_score:
+          type: number
+          description: Brevity and clarity
+        keyword_coverage:
+          type: array
+          items:
+            type: string
+          description: Important keywords present
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: List of improvement suggestions
+        raw_results:
+          type: object
+          description: Individual critic detailed results
+        execution_time:
+          type: number
+        llm_provider:
+          type: string
+        llm_model:
+          type: string
+        llm_temperature:
+          type: number
+        version:
+          type: string
+
+    AccomplishmentsEvaluationResponse:
+      type: object
+      properties:
+        composite_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Overall accomplishments effectiveness (0-100)
+        relevance_score:
+          type: number
+          description: Job alignment score
+        impact_score:
+          type: number
+          description: Strength and quantification of accomplishments
+        clarity_score:
+          type: number
+          description: Organization and readability
+        keyword_coverage:
+          type: array
+          items:
+            type: string
+          description: Important keywords present
+        fidelity_score:
+          type: number
+          description: Truthfulness to original experience
+        should_improve:
+          type: boolean
+          description: Whether improvements are recommended
+        improvement_strategy:
+          type: string
+          description: How to improve (if applicable)
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: List of specific suggestions
+        raw_results:
+          type: object
+          description: Individual critic detailed results
+        execution_time:
+          type: number
+        llm_provider:
+          type: string
+        llm_model:
+          type: string
+        llm_temperature:
+          type: number
+        version:
+          type: string
+
+    WorkExperienceEvaluationResponse:
+      type: object
+      properties:
+        composite_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Overall work experience effectiveness (0-100)
+        relevance_score:
+          type: number
+          description: Job alignment score
+        impact_score:
+          type: number
+          description: Achievements and results score
+        progression_score:
+          type: number
+          description: Career growth score
+        skills_score:
+          type: number
+          description: Skills demonstration score
+        clarity_score:
+          type: number
+          description: Formatting and clarity score
+        should_improve:
+          type: boolean
+          description: Whether improvements are recommended
+        improvement_strategy:
+          type: string
+          description: How to improve (if applicable)
+        experience_insights:
+          type: object
+          description: Specific insights about experiences
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: List of specific suggestions
+        raw_results:
+          type: object
+          description: Individual critic detailed results
+        execution_time:
+          type: number
+        llm_provider:
+          type: string
+        llm_model:
+          type: string
+        llm_temperature:
+          type: number
+        version:
+          type: string
+
+    EvaluationResponseV2:
+      type: object
+      properties:
+        composite_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Overall evaluation score
+        quality_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Resume quality score (separate from job fit)
+        job_fit_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Job fit score (0.0-1.0)
+        fidelity_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Fidelity score (if original provided)
+        pass:
+          type: boolean
+          description: Whether the resume passes the threshold
+        threshold:
+          type: number
+          description: The threshold used for pass/fail
+        should_improve:
+          type: boolean
+          description: Clear signal whether improvements are needed
+        improvement_strategy:
+          type: string
+          description: Strategic guidance on how to improve
+        score_ceiling:
+          type: number
+          description: Maximum achievable score given job fit
+        results:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CriticResult'
+          description: Individual critic results
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: Specific improvement recommendations
+        execution_time:
+          type: number
+        llm_provider:
+          type: string
+        llm_model:
+          type: string
+        llm_temperature:
+          type: number
+        process_markdown:
+          type: boolean
+        max_workers:
+          type: integer
+        version:
+          type: string
+        api_version:
+          type: string
+          enum: [v2]
+
+    CoverLetterResponseV2:
+      type: object
+      properties:
+        composite_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Overall cover letter score
+        quality_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Cover letter quality score
+        job_fit_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Job fit score (0.0-1.0)
+        pass:
+          type: boolean
+          description: Whether the cover letter passes the threshold
+        threshold:
+          type: number
+          description: The threshold used for pass/fail
+        should_improve:
+          type: boolean
+          description: Clear signal whether improvements are needed
+        improvement_strategy:
+          type: string
+          description: Strategic guidance on how to improve
+        results:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CriticResult'
+          description: Individual critic results
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: Specific improvement recommendations
+        execution_time:
+          type: number
+        llm_provider:
+          type: string
+        llm_model:
+          type: string
+        llm_temperature:
+          type: number
+        process_markdown:
+          type: boolean
+        max_workers:
+          type: integer
+        version:
+          type: string
+        api_version:
+          type: string
+          enum: [v2]
+
+    AuditEventType:
+      type: string
+      enum:
+        - evaluation
+        - cover_letter_evaluation
+        - comparison
+        - fidelity_check
+        - comprehensive_evaluation
+        - job_fit_evaluation
+
+    CriticResultAudit:
+      type: object
+      properties:
+        critic_name:
+          type: string
+        score:
+          type: number
+        feedback:
+          type: string
+        execution_time_ms:
+          type: number
+        error:
+          type: string
+
+    LLMInteraction:
+      type: object
+      properties:
+        provider:
+          type: string
+          description: LLM provider (openai, ollama, gemini)
+        model:
+          type: string
+        prompt:
+          type: string
+        response:
+          type: string
+        temperature:
+          type: number
+        max_tokens:
+          type: integer
+        response_time_ms:
+          type: number
+        token_usage:
+          type: object
+          additionalProperties:
+            type: integer
+        error:
+          type: string
+
+    AuditEntry:
+      type: object
+      properties:
+        audit_id:
+          type: string
+          description: Unique identifier for this audit entry
+        event_type:
+          $ref: '#/components/schemas/AuditEventType'
+        request_timestamp:
+          type: string
+          format: date-time
+        response_timestamp:
+          type: string
+          format: date-time
+        endpoint:
+          type: string
+        method:
+          type: string
+        request_headers:
+          type: object
+          additionalProperties:
+            type: string
+        request_body:
+          type: object
+        query_parameters:
+          type: object
+          additionalProperties:
+            type: string
+        response_status:
+          type: integer
+        response_headers:
+          type: object
+          additionalProperties:
+            type: string
+        response_body:
+          type: object
+        app_version:
+          type: string
+        resume_content:
+          type: string
+        job_description:
+          type: string
+        cover_letter_content:
+          type: string
+        overall_score:
+          type: number
+        pass_status:
+          type: boolean
+        critic_results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CriticResultAudit'
+        llm_interactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/LLMInteraction'
+        total_execution_time_ms:
+          type: number
+        error_occurred:
+          type: boolean
+        error_message:
+          type: string
+        error_traceback:
+          type: string
+        user_identifier:
+          type: string
+        session_id:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    AuditStats:
+      type: object
+      properties:
+        total_requests:
+          type: integer
+        successful_requests:
+          type: integer
+        failed_requests:
+          type: integer
+        average_score:
+          type: number
+        pass_rate:
+          type: number
+        average_execution_time_ms:
+          type: number
+        requests_by_type:
+          type: object
+          additionalProperties:
+            type: integer
+        requests_by_date:
+          type: object
+          additionalProperties:
+            type: integer
+        top_error_messages:
+          type: array
+          items:
+            type: object
+            properties:
+              message:
+                type: string
+              count:
+                type: integer
+
+  responses:
+    ValidationError:
+      description: Validation Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    loc:
+                      type: array
+                      items:
+                        type: string
+                    msg:
+                      type: string
+                    type:
+                      type: string
+              body:
+                type: string
+
+    ServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+              error_type:
+                type: string
+              error_message:
+                type: string
+              traceback:
+                type: string
