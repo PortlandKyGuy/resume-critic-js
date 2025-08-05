@@ -31,6 +31,49 @@ class LLMError extends AppError {
   }
 }
 
+class LLMProviderError extends LLMError {
+  constructor(message, provider, originalError) {
+    super(message, provider, originalError);
+    this.code = originalError?.code || 'LLM_PROVIDER_ERROR';
+    this.response = originalError?.response;
+    this.isRetryable = this.checkRetryable();
+  }
+
+  checkRetryable() {
+    // Check for retryable error codes
+    const RETRYABLE_ERROR_CODES = [
+      'ECONNRESET',
+      'ETIMEDOUT',
+      'ENOTFOUND',
+      'ESOCKETTIMEDOUT',
+      'ECONNREFUSED'
+    ];
+
+    const RETRYABLE_STATUS_CODES = [
+      429, 500, 502, 503, 504
+    ];
+
+    if (this.code && RETRYABLE_ERROR_CODES.includes(this.code)) {
+      return true;
+    }
+
+    if (this.response?.status && RETRYABLE_STATUS_CODES.includes(this.response.status)) {
+      return true;
+    }
+
+    if (this.message) {
+      const message = this.message.toLowerCase();
+      if (message.includes('network')
+          || message.includes('timeout')
+          || message.includes('rate limit')) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+}
+
 class ConfigurationError extends AppError {
   constructor(message) {
     super(message, 500, 'CONFIGURATION_ERROR');
@@ -54,6 +97,7 @@ module.exports = {
   ValidationError,
   NotFoundError,
   LLMError,
+  LLMProviderError,
   ConfigurationError,
   errorSerializer,
   asyncHandler
