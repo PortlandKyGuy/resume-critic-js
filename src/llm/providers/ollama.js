@@ -11,7 +11,7 @@ const { logger } = require('../../utils/logger');
 const getOllamaClient = memoizeWith(identity, baseURL => {
   const url = baseURL || 'http://localhost:11434';
   logger.debug('Ollama: Creating axios client', { baseURL: url });
-  
+
   return axios.create({
     baseURL: url,
     timeout: 60000,
@@ -22,36 +22,6 @@ const getOllamaClient = memoizeWith(identity, baseURL => {
 });
 
 /**
- * Create Ollama provider for local LLM
- * @param {Object} config - Configuration object
- * @returns {Object} Ollama provider instance
- */
-const createOllamaProvider = (config = {}) => {
-  const baseURL = config.baseURL || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-  const model = config.model || 'llama2';
-  const temperature = config.temperature || 0.7;
-  const maxTokens = config.maxTokens || 2000;
-
-  logger.debug('Ollama: Creating provider', {
-    baseURL,
-    model,
-    temperature,
-    maxTokens
-  });
-
-  // Get memoized client
-  const client = getOllamaClient(baseURL);
-
-  logger.info('Ollama: Provider initialized', { baseURL, model, temperature, maxTokens });
-
-  return {
-    name: 'ollama',
-    model,
-    complete: createOllamaComplete(client, { model, temperature, maxTokens })
-  };
-};
-
-/**
  * Create Ollama complete function
  * @param {Object} client - Axios client instance
  * @param {Object} defaults - Default options
@@ -59,7 +29,7 @@ const createOllamaProvider = (config = {}) => {
  */
 const createOllamaComplete = curry(async (client, defaults, options) => {
   const startTime = Date.now();
-  
+
   logger.debug('Ollama: Starting completion request', {
     hasSystem: !!options.system,
     userPromptLength: options.user?.length,
@@ -69,9 +39,11 @@ const createOllamaComplete = curry(async (client, defaults, options) => {
 
   try {
     // Build prompt with system message if provided
-    let prompt = options.user;
+    const prompt = options.system
+      ? `System: ${options.system}\n\nUser: ${options.user}`
+      : options.user;
+
     if (options.system) {
-      prompt = `System: ${options.system}\n\nUser: ${options.user}`;
       logger.debug('Ollama: Combined system and user prompts', {
         combinedLength: prompt.length
       });
@@ -122,7 +94,7 @@ const createOllamaComplete = curry(async (client, defaults, options) => {
       evalDuration: response.data.eval_duration,
       promptEvalCount: response.data.prompt_eval_count,
       promptEvalDuration: response.data.prompt_eval_duration,
-      tokensPerSecond: response.data.eval_count && response.data.eval_duration 
+      tokensPerSecond: response.data.eval_count && response.data.eval_duration
         ? Math.round(response.data.eval_count / (response.data.eval_duration / 1e9))
         : undefined
     });
@@ -134,10 +106,11 @@ const createOllamaComplete = curry(async (client, defaults, options) => {
     return text;
   } catch (error) {
     const duration = Date.now() - startTime;
-    let message = `Ollama API error: ${error.message}`;
+    const message = error.code === 'ECONNREFUSED'
+      ? 'Ollama server is not running. Please start Ollama locally.'
+      : `Ollama API error: ${error.message}`;
 
     if (error.code === 'ECONNREFUSED') {
-      message = 'Ollama server is not running. Please start Ollama locally.';
       logger.error('Ollama: Connection refused', {
         duration,
         baseURL: client.defaults.baseURL,
@@ -156,6 +129,36 @@ const createOllamaComplete = curry(async (client, defaults, options) => {
     throw new LLMProviderError(message, 'ollama', error);
   }
 });
+
+/**
+ * Create Ollama provider for local LLM
+ * @param {Object} config - Configuration object
+ * @returns {Object} Ollama provider instance
+ */
+const createOllamaProvider = (config = {}) => {
+  const baseURL = config.baseURL || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+  const model = config.model || 'llama2';
+  const temperature = config.temperature || 0.7;
+  const maxTokens = config.maxTokens || 2000;
+
+  logger.debug('Ollama: Creating provider', {
+    baseURL,
+    model,
+    temperature,
+    maxTokens
+  });
+
+  // Get memoized client
+  const client = getOllamaClient(baseURL);
+
+  logger.info('Ollama: Provider initialized', { baseURL, model, temperature, maxTokens });
+
+  return {
+    name: 'ollama',
+    model,
+    complete: createOllamaComplete(client, { model, temperature, maxTokens })
+  };
+};
 
 /**
  * Check if Ollama is available

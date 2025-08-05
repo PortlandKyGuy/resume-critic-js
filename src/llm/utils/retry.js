@@ -24,126 +24,13 @@ const RETRYABLE_STATUS_CODES = [
 ];
 
 /**
- * Create retry wrapper for async functions
- * @param {Object} options - Retry options
- * @returns {Function} Retry wrapper function
+ * Sleep for specified milliseconds
+ * @param {number} ms - Milliseconds to sleep
+ * @returns {Promise} Sleep promise
  */
-const createRetry = (options = {}) => {
-  const config = {
-    maxRetries: options.maxRetries || 3,
-    backoff: options.backoff || 'exponential',
-    initialDelay: options.initialDelay || 1000,
-    maxDelay: options.maxDelay || 60000,
-    factor: options.factor || 2,
-    jitter: options.jitter !== false,
-    onRetry: options.onRetry || (() => {})
-  };
-
-  logger.debug('Retry: Creating retry wrapper', {
-    maxRetries: config.maxRetries,
-    backoff: config.backoff,
-    initialDelay: config.initialDelay,
-    maxDelay: config.maxDelay,
-    factor: config.factor,
-    jitter: config.jitter
-  });
-
-  return curry(async (fn, ...args) => {
-    let lastError;
-    const startTime = Date.now();
-    const functionName = fn.name || 'anonymous';
-
-    logger.debug('Retry: Starting retryable function execution', {
-      functionName,
-      maxRetries: config.maxRetries
-    });
-
-    for (let attempt = 0; attempt < config.maxRetries; attempt++) {
-      const attemptStartTime = Date.now();
-      
-      try {
-        logger.debug('Retry: Attempting function call', {
-          functionName,
-          attempt: attempt + 1,
-          maxRetries: config.maxRetries
-        });
-        
-        const result = await fn(...args);
-        
-        const totalDuration = Date.now() - startTime;
-        logger.info('Retry: Function succeeded', {
-          functionName,
-          attempt: attempt + 1,
-          totalDuration,
-          retriesNeeded: attempt
-        });
-        
-        return result;
-      } catch (error) {
-        lastError = error;
-        const attemptDuration = Date.now() - attemptStartTime;
-
-        // Check if error is retryable
-        const retryable = isRetryable(error);
-        
-        logger.debug('Retry: Function failed', {
-          functionName,
-          attempt: attempt + 1,
-          attemptDuration,
-          errorMessage: error.message,
-          errorCode: error.code,
-          statusCode: error.response?.status,
-          retryable
-        });
-
-        if (!retryable) {
-          logger.warn('Retry: Error is not retryable', {
-            functionName,
-            errorMessage: error.message,
-            errorCode: error.code
-          });
-          throw error;
-        }
-
-        // If this is the last attempt, throw the error
-        if (attempt === config.maxRetries - 1) {
-          const totalDuration = Date.now() - startTime;
-          logger.error('Retry: Max retries exhausted', {
-            functionName,
-            maxRetries: config.maxRetries,
-            totalDuration,
-            finalError: error.message
-          });
-          throw error;
-        }
-
-        // Calculate delay
-        const delay = calculateDelay(attempt, config);
-
-        logger.info('Retry: Will retry after delay', {
-          functionName,
-          attempt: attempt + 1,
-          nextAttempt: attempt + 2,
-          delay,
-          backoffStrategy: config.backoff
-        });
-
-        // Call onRetry callback
-        config.onRetry({
-          error,
-          attempt: attempt + 1,
-          delay,
-          willRetry: true
-        });
-
-        // Wait before retrying
-        await sleep(delay);
-      }
-    }
-
-    throw lastError;
-  });
-};
+const sleep = ms => new Promise(resolve => {
+  setTimeout(resolve, ms);
+});
 
 /**
  * Check if an error is retryable
@@ -177,9 +64,7 @@ const isRetryable = error => {
         || message.includes('rate limit')) {
       logger.debug('Retry: Error message indicates retryable condition', {
         errorMessage: error.message,
-        matchedKeywords: ['network', 'timeout', 'rate limit'].filter(keyword => 
-          message.includes(keyword)
-        )
+        matchedKeywords: ['network', 'timeout', 'rate limit'].filter(keyword => message.includes(keyword))
       });
       return true;
     }
@@ -208,33 +93,29 @@ const isRetryable = error => {
  * @returns {number} Delay in milliseconds
  */
 const calculateDelay = (attempt, config) => {
-  let baseDelay;
   const attemptNumber = attempt + 1;
 
-  switch (config.backoff) {
-    case 'exponential':
-      baseDelay = config.initialDelay * config.factor ** attempt;
-      break;
-    case 'linear':
-      baseDelay = config.initialDelay * attemptNumber;
-      break;
-    case 'constant':
-      baseDelay = config.initialDelay;
-      break;
-    default:
-      baseDelay = config.initialDelay;
-  }
+  // Calculate base delay based on backoff strategy
+  const exponentialDelay = config.initialDelay * (config.factor ** attempt);
+  const linearDelay = config.initialDelay * attemptNumber;
+  const constantDelay = config.initialDelay;
+
+  const baseDelay = (() => {
+    if (config.backoff === 'exponential') return exponentialDelay;
+    if (config.backoff === 'linear') return linearDelay;
+    if (config.backoff === 'constant') return constantDelay;
+    return config.initialDelay;
+  })();
 
   // Apply max delay cap
   const cappedDelay = Math.min(baseDelay, config.maxDelay);
 
   // Add jitter if enabled
-  let finalDelay = cappedDelay;
+  const jitterAmount = config.jitter ? cappedDelay * 0.2 : 0; // 20% jitter
+  const jitterValue = config.jitter ? (Math.random() - 0.5) * 2 * jitterAmount : 0;
+  const finalDelay = cappedDelay + jitterValue;
+
   if (config.jitter) {
-    const jitterAmount = cappedDelay * 0.2; // 20% jitter
-    const jitterValue = (Math.random() - 0.5) * 2 * jitterAmount;
-    finalDelay = cappedDelay + jitterValue;
-    
     logger.debug('Retry: Applied jitter to delay', {
       baseDelay: cappedDelay,
       jitterAmount,
@@ -244,7 +125,7 @@ const calculateDelay = (attempt, config) => {
   }
 
   const calculatedDelay = Math.max(0, Math.round(finalDelay));
-  
+
   logger.debug('Retry: Calculated retry delay', {
     attempt: attemptNumber,
     backoffStrategy: config.backoff,
@@ -259,11 +140,127 @@ const calculateDelay = (attempt, config) => {
 };
 
 /**
- * Sleep for specified milliseconds
- * @param {number} ms - Milliseconds to sleep
- * @returns {Promise} Sleep promise
+ * Create retry wrapper for async functions
+ * @param {Object} options - Retry options
+ * @returns {Function} Retry wrapper function
  */
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const createRetry = (options = {}) => {
+  const config = {
+    maxRetries: options.maxRetries || 3,
+    backoff: options.backoff || 'exponential',
+    initialDelay: options.initialDelay || 1000,
+    maxDelay: options.maxDelay || 60000,
+    factor: options.factor || 2,
+    jitter: options.jitter !== false,
+    onRetry: options.onRetry || (() => {})
+  };
+
+  logger.debug('Retry: Creating retry wrapper', {
+    maxRetries: config.maxRetries,
+    backoff: config.backoff,
+    initialDelay: config.initialDelay,
+    maxDelay: config.maxDelay,
+    factor: config.factor,
+    jitter: config.jitter
+  });
+
+  return curry(async (fn, ...args) => {
+    const startTime = Date.now();
+    const functionName = fn.name || 'anonymous';
+
+    logger.debug('Retry: Starting retryable function execution', {
+      functionName,
+      maxRetries: config.maxRetries
+    });
+
+    const executeWithRetry = async attemptNumber => {
+      const attemptStartTime = Date.now();
+
+      try {
+        logger.debug('Retry: Attempting function call', {
+          functionName,
+          attempt: attemptNumber + 1,
+          maxRetries: config.maxRetries
+        });
+
+        const result = await fn(...args);
+
+        const totalDuration = Date.now() - startTime;
+        logger.info('Retry: Function succeeded', {
+          functionName,
+          attempt: attemptNumber + 1,
+          totalDuration,
+          retriesNeeded: attemptNumber
+        });
+
+        return result;
+      } catch (error) {
+        const attemptDuration = Date.now() - attemptStartTime;
+
+        // Check if error is retryable
+        const retryable = isRetryable(error);
+
+        logger.debug('Retry: Function failed', {
+          functionName,
+          attempt: attemptNumber + 1,
+          attemptDuration,
+          errorMessage: error.message,
+          errorCode: error.code,
+          statusCode: error.response?.status,
+          retryable
+        });
+
+        if (!retryable) {
+          logger.warn('Retry: Error is not retryable', {
+            functionName,
+            errorMessage: error.message,
+            errorCode: error.code
+          });
+          throw error;
+        }
+
+        // If this is the last attempt, throw the error
+        if (attemptNumber === config.maxRetries - 1) {
+          const totalDuration = Date.now() - startTime;
+          logger.error('Retry: Max retries exhausted', {
+            functionName,
+            maxRetries: config.maxRetries,
+            totalDuration,
+            finalError: error.message
+          });
+          throw error;
+        }
+
+        // Calculate delay
+        const delay = calculateDelay(attemptNumber, config);
+
+        logger.info('Retry: Will retry after delay', {
+          functionName,
+          attempt: attemptNumber + 1,
+          nextAttempt: attemptNumber + 2,
+          delay,
+          backoffStrategy: config.backoff
+        });
+
+        // Call onRetry callback
+        config.onRetry({
+          error,
+          attempt: attemptNumber + 1,
+          delay,
+          willRetry: true
+        });
+
+        // Wait before retrying
+        await sleep(delay);
+
+        // Recursive call for next attempt
+        return executeWithRetry(attemptNumber + 1);
+      }
+    };
+
+    return executeWithRetry(0);
+  });
+};
 
 /**
  * Wrap a function with retry logic
@@ -276,7 +273,7 @@ const withRetry = curry((options, fn) => {
     functionName: fn.name || 'anonymous',
     hasOptions: !!options
   });
-  
+
   const retry = createRetry(options);
   return async (...args) => retry(fn, ...args);
 });
@@ -292,7 +289,7 @@ const createRetryableClient = (client, options = {}) => {
     clientType: client.constructor.name,
     hasOptions: !!options
   });
-  
+
   const retry = createRetry(options);
 
   return {

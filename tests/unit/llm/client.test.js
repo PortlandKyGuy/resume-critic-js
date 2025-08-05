@@ -87,14 +87,18 @@ describe('LLM Client', () => {
     it('should retry on failure', async () => {
       let attempts = 0;
       
-      // Create a mock client with a failing function
-      const client = createMockClient({
-        'test': 'not used'
+      // Create a client with retry configuration
+      const client = createLLMClient({
+        useMock: true,
+        retry: {
+          maxRetries: 3,
+          initialDelay: 10
+        }
       });
       
-      // Override the complete function to test retry
+      // Override the provider's complete function to test retry
       const originalComplete = client.complete;
-      client.complete = jest.fn(async (options) => {
+      const mockComplete = jest.fn(async (options) => {
         attempts++;
         if (attempts < 3) {
           const error = new Error('Network error');
@@ -103,6 +107,13 @@ describe('LLM Client', () => {
         }
         return 'Success after retries';
       });
+      
+      // Replace the wrapped complete function with one that uses our mock
+      client.complete = async (options) => {
+        const { withRetry } = require('../../../src/llm/utils/retry');
+        const retryWrapper = withRetry({ maxRetries: 3, initialDelay: 10 }, mockComplete);
+        return retryWrapper(options);
+      };
       
       const response = await client.complete({ user: 'test' });
       expect(response).toBe('Success after retries');

@@ -1,5 +1,143 @@
-const { curry, chunk, map, flatten } = require('ramda');
+const { curry, chunk } = require('ramda');
 const { logger } = require('../../utils/logger');
+
+/**
+ * Process a single request
+ * @param {Object} llmClient - LLM client instance
+ * @param {Object} request - Request object
+ * @param {number} index - Request index
+ * @param {Function} onProgress - Progress callback
+ * @param {Function} onError - Error callback
+ * @returns {Promise} Processing promise
+ */
+const processRequest = async (llmClient, request, index, onProgress, onError) => {
+  const startTime = Date.now();
+
+  logger.debug('Batch: Processing request', {
+    index,
+    hasSystem: !!request.system,
+    userPromptLength: request.user?.length,
+    temperature: request.temperature,
+    maxTokens: request.maxTokens
+  });
+
+  try {
+    const result = await llmClient.complete(request);
+    const duration = Date.now() - startTime;
+
+    const successResult = {
+      success: true,
+      result,
+      request,
+      index
+    };
+
+    logger.debug('Batch: Request completed successfully', {
+      index,
+      duration,
+      responseLength: result?.length
+    });
+
+    onProgress(1);
+    return successResult;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+
+    const errorResult = {
+      success: false,
+      error: error.message,
+      request,
+      index
+    };
+
+    logger.error('Batch: Request failed', {
+      index,
+      duration,
+      errorMessage: error.message,
+      errorType: error.constructor.name
+    });
+
+    onError({ error, request, index });
+    return errorResult;
+  }
+};
+
+/**
+ * Process batch requests with concurrency control
+ * @param {Object} llmClient - LLM client instance
+ * @param {Array} batch - Batch of requests
+ * @param {number} concurrency - Max concurrent requests
+ * @param {Function} onProgress - Progress callback
+ * @param {Function} onError - Error callback
+ * @returns {Promise<Array>} Results array
+ */
+const processBatchConcurrently = async (llmClient, batch, concurrency, onProgress, onError) => {
+  logger.debug('Batch: Starting concurrent processing', {
+    batchSize: batch.length,
+    concurrency,
+    provider: llmClient.provider,
+    model: llmClient.model
+  });
+
+  // Process requests with concurrency control using recursive approach
+  const processWithConcurrency = async (remainingRequests, currentIndex = 0, results = [], executing = []) => {
+    if (remainingRequests.length === 0 && executing.length === 0) {
+      return results;
+    }
+
+    // Start new requests up to concurrency limit
+    const newExecutions = remainingRequests
+      .slice(0, concurrency - executing.length)
+      .map((request, idx) => {
+        const absoluteIndex = currentIndex + idx;
+        const promise = processRequest(llmClient, request, absoluteIndex, onProgress, onError)
+          .then(result => ({ result, absoluteIndex }));
+        return promise;
+      });
+
+    const updatedExecuting = [...executing, ...newExecutions];
+    const remainingAfterNew = remainingRequests.slice(newExecutions.length);
+
+    if (updatedExecuting.length === 0) {
+      return results;
+    }
+
+    // Wait for one to complete
+    const completed = await Promise.race(updatedExecuting);
+    const updatedResults = [
+      ...results.slice(0, completed.absoluteIndex),
+      completed.result,
+      ...results.slice(completed.absoluteIndex + 1)
+    ];
+
+    // Remove completed promise from executing
+    const stillExecuting = updatedExecuting.filter(p => p !== completed);
+
+    logger.debug('Batch: Request completed in concurrent batch', {
+      completedIndex: completed.absoluteIndex,
+      remainingRequests: remainingAfterNew.length,
+      executingCount: stillExecuting.length
+    });
+
+    // Recursive call with updated state
+    return processWithConcurrency(
+      remainingAfterNew,
+      currentIndex + newExecutions.length,
+      updatedResults,
+      stillExecuting
+    );
+  };
+
+  const results = await processWithConcurrency(batch);
+
+  logger.debug('Batch: Concurrent processing completed', {
+    totalProcessed: results.length,
+    successCount: results.filter(r => r.success).length,
+    failureCount: results.filter(r => !r.success).length
+  });
+
+  return results;
+};
 
 /**
  * Process multiple LLM requests in batches
@@ -24,8 +162,6 @@ const createBatchProcessor = (options = {}) => {
   return curry(async (llmClient, requests) => {
     const startTime = Date.now();
     const batches = chunk(config.batchSize, requests);
-    const results = [];
-    let processed = 0;
 
     logger.info('Batch: Starting batch processing', {
       totalRequests: requests.length,
@@ -34,32 +170,38 @@ const createBatchProcessor = (options = {}) => {
       concurrency: config.concurrency
     });
 
-    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-      const batch = batches[batchIndex];
+    // Process batches recursively
+    const processBatches = async (remainingBatches, processedCount = 0, accumulatedResults = []) => {
+      if (remainingBatches.length === 0) {
+        return accumulatedResults;
+      }
+
+      const [currentBatch, ...restBatches] = remainingBatches;
       const batchStartTime = Date.now();
-      
+      const batchIndex = batches.length - remainingBatches.length;
+
       logger.debug('Batch: Processing batch', {
         batchIndex: batchIndex + 1,
         totalBatches: batches.length,
-        batchSize: batch.length
+        batchSize: currentBatch.length
       });
 
       const batchResults = await processBatchConcurrently(
         llmClient,
-        batch,
+        currentBatch,
         config.concurrency,
         progress => {
-          processed += progress;
-          const percentage = (processed / requests.length) * 100;
-          
+          const newProcessedCount = processedCount + progress;
+          const percentage = (newProcessedCount / requests.length) * 100;
+
           logger.debug('Batch: Progress update', {
-            processed,
+            processed: newProcessedCount,
             total: requests.length,
             percentage: Math.round(percentage)
           });
-          
+
           config.onProgress({
-            processed,
+            processed: newProcessedCount,
             total: requests.length,
             percentage
           });
@@ -70,22 +212,29 @@ const createBatchProcessor = (options = {}) => {
       const batchDuration = Date.now() - batchStartTime;
       const successCount = batchResults.filter(r => r.success).length;
       const failureCount = batchResults.filter(r => !r.success).length;
-      
+
       logger.info('Batch: Batch completed', {
         batchIndex: batchIndex + 1,
         batchDuration,
         successCount,
         failureCount,
-        avgTimePerRequest: Math.round(batchDuration / batch.length)
+        avgTimePerRequest: Math.round(batchDuration / currentBatch.length)
       });
 
-      results.push(...batchResults);
-    }
+      // Recursive call for remaining batches
+      return processBatches(
+        restBatches,
+        processedCount + currentBatch.length,
+        [...accumulatedResults, ...batchResults]
+      );
+    };
+
+    const results = await processBatches(batches);
 
     const totalDuration = Date.now() - startTime;
     const totalSuccess = results.filter(r => r.success).length;
     const totalFailure = results.filter(r => !r.success).length;
-    
+
     logger.info('Batch: All batches completed', {
       totalDuration,
       totalRequests: requests.length,
@@ -99,110 +248,6 @@ const createBatchProcessor = (options = {}) => {
 };
 
 /**
- * Process a batch of requests concurrently
- * @param {Object} llmClient - LLM client instance
- * @param {Array} batch - Batch of requests
- * @param {number} concurrency - Max concurrent requests
- * @param {Function} onProgress - Progress callback
- * @param {Function} onError - Error callback
- * @returns {Promise<Array>} Results array
- */
-const processBatchConcurrently = async (llmClient, batch, concurrency, onProgress, onError) => {
-  const results = new Array(batch.length);
-  const executing = [];
-  
-  logger.debug('Batch: Starting concurrent processing', {
-    batchSize: batch.length,
-    concurrency,
-    provider: llmClient.provider,
-    model: llmClient.model
-  });
-
-  for (let i = 0; i < batch.length; i++) {
-    const promise = processRequest(llmClient, batch[i], i, results, onProgress, onError);
-    executing.push(promise);
-
-    if (executing.length >= concurrency) {
-      logger.debug('Batch: Reached concurrency limit, waiting for slot', {
-        currentConcurrency: executing.length,
-        maxConcurrency: concurrency,
-        pendingRequests: batch.length - i - 1
-      });
-      
-      await Promise.race(executing);
-      executing.splice(executing.findIndex(p => p === promise), 1);
-    }
-  }
-
-  logger.debug('Batch: Waiting for remaining requests', {
-    remainingRequests: executing.length
-  });
-  
-  await Promise.all(executing);
-  return results;
-};
-
-/**
- * Process a single request
- * @param {Object} llmClient - LLM client instance
- * @param {Object} request - Request object
- * @param {number} index - Request index
- * @param {Array} results - Results array
- * @param {Function} onProgress - Progress callback
- * @param {Function} onError - Error callback
- * @returns {Promise} Processing promise
- */
-const processRequest = async (llmClient, request, index, results, onProgress, onError) => {
-  const startTime = Date.now();
-  
-  logger.debug('Batch: Processing request', {
-    index,
-    hasSystem: !!request.system,
-    userPromptLength: request.user?.length,
-    temperature: request.temperature,
-    maxTokens: request.maxTokens
-  });
-  
-  try {
-    const result = await llmClient.complete(request);
-    const duration = Date.now() - startTime;
-    
-    results[index] = {
-      success: true,
-      result,
-      request,
-      index
-    };
-    
-    logger.debug('Batch: Request completed successfully', {
-      index,
-      duration,
-      responseLength: result?.length
-    });
-    
-    onProgress(1);
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    
-    results[index] = {
-      success: false,
-      error: error.message,
-      request,
-      index
-    };
-    
-    logger.error('Batch: Request failed', {
-      index,
-      duration,
-      errorMessage: error.message,
-      errorType: error.constructor.name
-    });
-    
-    onError({ error, request, index });
-  }
-};
-
-/**
  * Chunk requests by estimated token count
  * @param {number} maxTokens - Max tokens per chunk
  * @param {Function} tokenEstimator - Function to estimate tokens
@@ -210,16 +255,17 @@ const processRequest = async (llmClient, request, index, results, onProgress, on
  * @returns {Array} Array of chunks
  */
 const chunkByTokens = curry((maxTokens, tokenEstimator, requests) => {
-  const chunks = [];
-  let currentChunk = [];
-  let currentTokens = 0;
-  
   logger.debug('Batch: Chunking requests by token count', {
     maxTokensPerChunk: maxTokens,
     totalRequests: requests.length
   });
 
-  for (const request of requests) {
+  const chunkRequests = (remainingRequests, currentChunk = [], currentTokens = 0, chunks = []) => {
+    if (remainingRequests.length === 0) {
+      return currentChunk.length > 0 ? [...chunks, currentChunk] : chunks;
+    }
+
+    const [request, ...rest] = remainingRequests;
     const estimatedTokens = tokenEstimator(request);
 
     if (currentTokens + estimatedTokens > maxTokens && currentChunk.length > 0) {
@@ -228,20 +274,20 @@ const chunkByTokens = curry((maxTokens, tokenEstimator, requests) => {
         tokenCount: currentTokens,
         nextRequestTokens: estimatedTokens
       });
-      
-      chunks.push(currentChunk);
-      currentChunk = [];
-      currentTokens = 0;
+
+      return chunkRequests(remainingRequests, [], 0, [...chunks, currentChunk]);
     }
 
-    currentChunk.push(request);
-    currentTokens += estimatedTokens;
-  }
+    return chunkRequests(
+      rest,
+      [...currentChunk, request],
+      currentTokens + estimatedTokens,
+      chunks
+    );
+  };
 
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk);
-  }
-  
+  const chunks = chunkRequests(requests);
+
   logger.info('Batch: Token-based chunking complete', {
     totalChunks: chunks.length,
     chunkSizes: chunks.map(c => c.length),
@@ -260,7 +306,7 @@ const chunkByTokens = curry((maxTokens, tokenEstimator, requests) => {
 const mergeBatchRequests = (requests, options = {}) => {
   const separator = options.separator || '\n---\n';
   const includeIndex = options.includeIndex !== false;
-  
+
   logger.debug('Batch: Merging batch requests', {
     requestCount: requests.length,
     includeIndex,
@@ -274,14 +320,14 @@ const mergeBatchRequests = (requests, options = {}) => {
 
   const mergedSystem = requests[0].system || '';
   const totalMaxTokens = options.maxTokens || requests.reduce((sum, req) => sum + (req.maxTokens || 500), 0);
-  
+
   const mergedRequest = {
     system: mergedSystem,
     user: mergedUser,
     temperature: requests[0].temperature,
     maxTokens: totalMaxTokens
   };
-  
+
   logger.info('Batch: Requests merged', {
     originalCount: requests.length,
     mergedUserLength: mergedUser.length,
@@ -301,13 +347,13 @@ const mergeBatchRequests = (requests, options = {}) => {
  */
 const splitBatchResponse = (response, count, options = {}) => {
   const separator = options.separator || '\n---\n';
-  
+
   logger.debug('Batch: Splitting batch response', {
     responseLength: response.length,
     expectedCount: count,
     separator: separator.replace(/\n/g, '\\n')
   });
-  
+
   const parts = response.split(separator);
 
   if (parts.length !== count) {
@@ -316,28 +362,29 @@ const splitBatchResponse = (response, count, options = {}) => {
       actualParts: parts.length,
       fallbackStrategy: 'equal chunks'
     });
-    
+
     // If split doesn't match expected count, return equal portions
     const chunkSize = Math.ceil(response.length / count);
-    const chunks = Array.from({ length: count }, (_, i) => 
-      response.substring(i * chunkSize, (i + 1) * chunkSize).trim()
+    const chunks = Array.from(
+      { length: count },
+      (_, i) => response.substring(i * chunkSize, (i + 1) * chunkSize).trim()
     );
-    
+
     logger.debug('Batch: Created equal chunks', {
       chunkSize,
       chunkLengths: chunks.map(c => c.length)
     });
-    
+
     return chunks;
   }
 
   const trimmedParts = parts.map(part => part.trim());
-  
+
   logger.info('Batch: Response split successfully', {
     partCount: trimmedParts.length,
     partLengths: trimmedParts.map(p => p.length)
   });
-  
+
   return trimmedParts;
 };
 
@@ -350,14 +397,14 @@ const estimateTokens = request => {
   const text = `${request.system || ''} ${request.user || ''}`;
   // Rough estimate: 1 token ≈ 4 characters
   const estimatedTokens = Math.ceil(text.length / 4);
-  
+
   logger.debug('Batch: Estimated token count', {
     textLength: text.length,
     estimatedTokens,
     hasSystem: !!request.system,
     userLength: request.user?.length
   });
-  
+
   return estimatedTokens;
 };
 
