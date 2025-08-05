@@ -10,8 +10,7 @@ const { withRetry } = require('./utils/retry');
  * @returns {boolean} True if mock should be used
  */
 const shouldUseMock = config => config.useMock
-  || process.env.USE_MOCK_LLM === 'true'
-  || process.env.NODE_ENV === 'test';
+  || process.env.USE_MOCK_LLM === 'true';
 
 /**
  * Get API key for a provider
