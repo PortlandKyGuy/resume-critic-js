@@ -49,17 +49,31 @@ const createOpenAIComplete = curry(async (client, defaults, options) => {
       content: options.user
     });
 
-    const response = await client.chat.completions.create({
+    const completionOptions = {
       model: options.model || defaults.model,
       messages,
       temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
-      max_tokens: options.maxTokens || defaults.maxTokens,
-      response_format: options.responseFormat,
-      seed: options.seed,
-      top_p: options.topP,
-      frequency_penalty: options.frequencyPenalty,
-      presence_penalty: options.presencePenalty
-    });
+      max_tokens: options.maxTokens || defaults.maxTokens
+    };
+
+    // Only add optional parameters if they are explicitly provided
+    if (options.responseFormat !== undefined) {
+      completionOptions.response_format = options.responseFormat;
+    }
+    if (options.seed !== undefined) {
+      completionOptions.seed = options.seed;
+    }
+    if (options.topP !== undefined) {
+      completionOptions.top_p = options.topP;
+    }
+    if (options.frequencyPenalty !== undefined) {
+      completionOptions.frequency_penalty = options.frequencyPenalty;
+    }
+    if (options.presencePenalty !== undefined) {
+      completionOptions.presence_penalty = options.presencePenalty;
+    }
+
+    const response = await client.chat.completions.create(completionOptions);
 
     return response.choices[0].message.content;
   } catch (error) {
