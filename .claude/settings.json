@@ -37,5 +37,18 @@
     "deny": [],
     "additionalDirectories": []
   },
-  "enableAllProjectMcpServers": true
+  "enableAllProjectMcpServers": true,
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Fix any errors in this report...' && npm run lint"
+          }
+        ]
+      }
+    ]
+  }
 }
