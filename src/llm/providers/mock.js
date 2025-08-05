@@ -1,4 +1,5 @@
 const { curry } = require('ramda');
+const { logger } = require('../../utils/logger');
 
 /**
  * Simulate network delay
@@ -104,19 +105,66 @@ const getDefaultResponses = () => ({
  * @returns {Function} Mock complete function
  */
 const createMockComplete = curry(async (responses, options) => {
+  const startTime = Date.now();
+  const delayMin = 100;
+  const delayMax = 300;
+  const delay = Math.random() * (delayMax - delayMin) + delayMin;
+  
+  logger.debug('Mock: Starting completion request', {
+    hasSystem: !!options.system,
+    userPromptLength: options.user?.length,
+    temperature: options.temperature,
+    maxTokens: options.maxTokens,
+    simulatedDelay: Math.round(delay)
+  });
+
   // Simulate network delay
-  await simulateDelay(100, 300);
+  await simulateDelay(delayMin, delayMax);
 
   // Check for specific mock response
   const customResponse = findCustomResponse(responses, options);
-  if (customResponse) return customResponse;
+  if (customResponse) {
+    const duration = Date.now() - startTime;
+    logger.debug('Mock: Found custom response', {
+      duration,
+      matchedKey: Object.keys(responses).find(k => options.user.toLowerCase().includes(k.toLowerCase())),
+      responseLength: customResponse.length
+    });
+    logger.info('Mock: Completion successful (custom response)', {
+      duration,
+      responseLength: customResponse.length
+    });
+    return customResponse;
+  }
 
   // Generate appropriate mock response based on prompt
   if (options.user.includes('evaluate this resume')) {
-    return generateBatchEvaluationResponse();
+    const response = generateBatchEvaluationResponse();
+    const duration = Date.now() - startTime;
+    logger.debug('Mock: Generated batch evaluation response', {
+      duration,
+      evaluationCount: 7,
+      responseLength: response.length
+    });
+    logger.info('Mock: Completion successful (batch evaluation)', {
+      duration,
+      responseLength: response.length
+    });
+    return response;
   }
 
-  return `Mock response for: ${options.user.substring(0, 50)}`;
+  const defaultResponse = `Mock response for: ${options.user.substring(0, 50)}`;
+  const duration = Date.now() - startTime;
+  logger.debug('Mock: Generated default response', {
+    duration,
+    promptPreview: options.user.substring(0, 50),
+    responseLength: defaultResponse.length
+  });
+  logger.info('Mock: Completion successful (default)', {
+    duration,
+    responseLength: defaultResponse.length
+  });
+  return defaultResponse;
 });
 
 /**
@@ -126,6 +174,17 @@ const createMockComplete = curry(async (responses, options) => {
  */
 const createMockProvider = (config = {}) => {
   const responses = config.responses || getDefaultResponses();
+  
+  logger.debug('Mock: Creating provider', {
+    hasCustomResponses: !!config.responses,
+    responseCount: Object.keys(responses).length,
+    model: 'mock-1.0'
+  });
+  
+  logger.info('Mock: Provider initialized', {
+    model: 'mock-1.0',
+    customResponseKeys: config.responses ? Object.keys(config.responses) : ['default responses']
+  });
 
   return {
     name: 'mock',
@@ -145,6 +204,16 @@ const setMockResponse = curry((provider, key, response) => {
   if (provider.name === 'mock' && provider.responses) {
     // eslint-disable-next-line no-param-reassign
     provider.responses[key] = response;
+    logger.debug('Mock: Response mapping updated', {
+      key,
+      responseLength: response.length
+    });
+  } else {
+    logger.warn('Mock: Failed to set response', {
+      providerName: provider.name,
+      hasResponses: !!provider.responses,
+      key
+    });
   }
   return provider;
 });

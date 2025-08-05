@@ -1,19 +1,25 @@
 const axios = require('axios');
 const { curry, memoizeWith, identity } = require('ramda');
 const { LLMProviderError } = require('../../utils/errors');
+const { logger } = require('../../utils/logger');
 
 /**
  * Get memoized Ollama client
  * @param {string} baseURL - Base URL for Ollama
  * @returns {Object} Axios client instance
  */
-const getOllamaClient = memoizeWith(identity, baseURL => axios.create({
-  baseURL: baseURL || 'http://localhost:11434',
-  timeout: 60000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-}));
+const getOllamaClient = memoizeWith(identity, baseURL => {
+  const url = baseURL || 'http://localhost:11434';
+  logger.debug('Ollama: Creating axios client', { baseURL: url });
+  
+  return axios.create({
+    baseURL: url,
+    timeout: 60000,
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+});
 
 /**
  * Create Ollama provider for local LLM
@@ -26,8 +32,17 @@ const createOllamaProvider = (config = {}) => {
   const temperature = config.temperature || 0.7;
   const maxTokens = config.maxTokens || 2000;
 
+  logger.debug('Ollama: Creating provider', {
+    baseURL,
+    model,
+    temperature,
+    maxTokens
+  });
+
   // Get memoized client
   const client = getOllamaClient(baseURL);
+
+  logger.info('Ollama: Provider initialized', { baseURL, model, temperature, maxTokens });
 
   return {
     name: 'ollama',
@@ -43,11 +58,23 @@ const createOllamaProvider = (config = {}) => {
  * @returns {Function} Complete function
  */
 const createOllamaComplete = curry(async (client, defaults, options) => {
+  const startTime = Date.now();
+  
+  logger.debug('Ollama: Starting completion request', {
+    hasSystem: !!options.system,
+    userPromptLength: options.user?.length,
+    temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
+    model: options.model || defaults.model
+  });
+
   try {
     // Build prompt with system message if provided
     let prompt = options.user;
     if (options.system) {
       prompt = `System: ${options.system}\n\nUser: ${options.user}`;
+      logger.debug('Ollama: Combined system and user prompts', {
+        combinedLength: prompt.length
+      });
     }
 
     const requestData = {
@@ -64,18 +91,66 @@ const createOllamaComplete = curry(async (client, defaults, options) => {
       }
     };
 
+    logger.debug('Ollama: Sending request', {
+      model: requestData.model,
+      promptLength: prompt.length,
+      numPredict: requestData.options.num_predict,
+      temperature: requestData.options.temperature,
+      hasOptionalParams: !!(options.topP || options.topK || options.seed || options.repeatPenalty)
+    });
+
     const response = await client.post('/api/generate', requestData);
 
+    const duration = Date.now() - startTime;
+
     if (!response.data || !response.data.response) {
+      logger.error('Ollama: Invalid response structure', {
+        duration,
+        hasData: !!response.data,
+        hasResponse: !!response.data?.response
+      });
       throw new Error('Invalid response from Ollama');
     }
 
-    return response.data.response;
+    const text = response.data.response;
+
+    logger.info('Ollama: Completion successful', {
+      duration,
+      responseLength: text.length,
+      model: response.data.model,
+      evalCount: response.data.eval_count,
+      evalDuration: response.data.eval_duration,
+      promptEvalCount: response.data.prompt_eval_count,
+      promptEvalDuration: response.data.prompt_eval_duration,
+      tokensPerSecond: response.data.eval_count && response.data.eval_duration 
+        ? Math.round(response.data.eval_count / (response.data.eval_duration / 1e9))
+        : undefined
+    });
+
+    logger.debug('Ollama: Response preview', {
+      preview: text.substring(0, 100) + (text.length > 100 ? '...' : '')
+    });
+
+    return text;
   } catch (error) {
+    const duration = Date.now() - startTime;
     let message = `Ollama API error: ${error.message}`;
 
     if (error.code === 'ECONNREFUSED') {
       message = 'Ollama server is not running. Please start Ollama locally.';
+      logger.error('Ollama: Connection refused', {
+        duration,
+        baseURL: client.defaults.baseURL,
+        suggestion: 'Run "ollama serve" to start the Ollama server'
+      });
+    } else {
+      logger.error('Ollama: Request failed', {
+        duration,
+        errorMessage: error.message,
+        errorCode: error.code,
+        statusCode: error.response?.status,
+        model: options.model || defaults.model
+      });
     }
 
     throw new LLMProviderError(message, 'ollama', error);

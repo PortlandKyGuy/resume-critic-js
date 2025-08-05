@@ -1,4 +1,5 @@
 const { curry } = require('ramda');
+const { logger } = require('../../utils/logger');
 
 /**
  * Error types that should be retried
@@ -38,27 +39,94 @@ const createRetry = (options = {}) => {
     onRetry: options.onRetry || (() => {})
   };
 
+  logger.debug('Retry: Creating retry wrapper', {
+    maxRetries: config.maxRetries,
+    backoff: config.backoff,
+    initialDelay: config.initialDelay,
+    maxDelay: config.maxDelay,
+    factor: config.factor,
+    jitter: config.jitter
+  });
+
   return curry(async (fn, ...args) => {
     let lastError;
+    const startTime = Date.now();
+    const functionName = fn.name || 'anonymous';
+
+    logger.debug('Retry: Starting retryable function execution', {
+      functionName,
+      maxRetries: config.maxRetries
+    });
 
     for (let attempt = 0; attempt < config.maxRetries; attempt++) {
+      const attemptStartTime = Date.now();
+      
       try {
-        return await fn(...args);
+        logger.debug('Retry: Attempting function call', {
+          functionName,
+          attempt: attempt + 1,
+          maxRetries: config.maxRetries
+        });
+        
+        const result = await fn(...args);
+        
+        const totalDuration = Date.now() - startTime;
+        logger.info('Retry: Function succeeded', {
+          functionName,
+          attempt: attempt + 1,
+          totalDuration,
+          retriesNeeded: attempt
+        });
+        
+        return result;
       } catch (error) {
         lastError = error;
+        const attemptDuration = Date.now() - attemptStartTime;
 
         // Check if error is retryable
-        if (!isRetryable(error)) {
+        const retryable = isRetryable(error);
+        
+        logger.debug('Retry: Function failed', {
+          functionName,
+          attempt: attempt + 1,
+          attemptDuration,
+          errorMessage: error.message,
+          errorCode: error.code,
+          statusCode: error.response?.status,
+          retryable
+        });
+
+        if (!retryable) {
+          logger.warn('Retry: Error is not retryable', {
+            functionName,
+            errorMessage: error.message,
+            errorCode: error.code
+          });
           throw error;
         }
 
         // If this is the last attempt, throw the error
         if (attempt === config.maxRetries - 1) {
+          const totalDuration = Date.now() - startTime;
+          logger.error('Retry: Max retries exhausted', {
+            functionName,
+            maxRetries: config.maxRetries,
+            totalDuration,
+            finalError: error.message
+          });
           throw error;
         }
 
         // Calculate delay
         const delay = calculateDelay(attempt, config);
+
+        logger.info('Retry: Will retry after delay', {
+          functionName,
+          attempt: attempt + 1,
+          nextAttempt: attempt + 2,
+          delay,
+          backoffStrategy: config.backoff
+        });
 
         // Call onRetry callback
         config.onRetry({
@@ -85,11 +153,19 @@ const createRetry = (options = {}) => {
 const isRetryable = error => {
   // Check for retryable error codes
   if (error.code && RETRYABLE_ERROR_CODES.includes(error.code)) {
+    logger.debug('Retry: Error code is retryable', {
+      errorCode: error.code,
+      retryableErrorCodes: RETRYABLE_ERROR_CODES
+    });
     return true;
   }
 
   // Check for retryable HTTP status codes
   if (error.response?.status && RETRYABLE_STATUS_CODES.includes(error.response.status)) {
+    logger.debug('Retry: HTTP status code is retryable', {
+      statusCode: error.response.status,
+      retryableStatusCodes: RETRYABLE_STATUS_CODES
+    });
     return true;
   }
 
@@ -99,11 +175,29 @@ const isRetryable = error => {
     if (message.includes('network')
         || message.includes('timeout')
         || message.includes('rate limit')) {
+      logger.debug('Retry: Error message indicates retryable condition', {
+        errorMessage: error.message,
+        matchedKeywords: ['network', 'timeout', 'rate limit'].filter(keyword => 
+          message.includes(keyword)
+        )
+      });
       return true;
     }
   }
 
+  // Check for custom isRetryable property (from LLMProviderError)
+  if (typeof error.isRetryable === 'function' && error.isRetryable()) {
+    logger.debug('Retry: Error has custom isRetryable method returning true');
+    return true;
+  }
+
   // Don't retry by default
+  logger.debug('Retry: Error is not retryable', {
+    errorType: error.constructor.name,
+    errorMessage: error.message,
+    hasCode: !!error.code,
+    hasResponse: !!error.response
+  });
   return false;
 };
 
@@ -114,32 +208,54 @@ const isRetryable = error => {
  * @returns {number} Delay in milliseconds
  */
 const calculateDelay = (attempt, config) => {
-  let delay;
+  let baseDelay;
+  const attemptNumber = attempt + 1;
 
   switch (config.backoff) {
     case 'exponential':
-      delay = config.initialDelay * config.factor ** attempt;
+      baseDelay = config.initialDelay * config.factor ** attempt;
       break;
     case 'linear':
-      delay = config.initialDelay * (attempt + 1);
+      baseDelay = config.initialDelay * attemptNumber;
       break;
     case 'constant':
-      delay = config.initialDelay;
+      baseDelay = config.initialDelay;
       break;
     default:
-      delay = config.initialDelay;
+      baseDelay = config.initialDelay;
   }
 
   // Apply max delay cap
-  delay = Math.min(delay, config.maxDelay);
+  const cappedDelay = Math.min(baseDelay, config.maxDelay);
 
   // Add jitter if enabled
+  let finalDelay = cappedDelay;
   if (config.jitter) {
-    const jitterAmount = delay * 0.2; // 20% jitter
-    delay += (Math.random() - 0.5) * 2 * jitterAmount;
+    const jitterAmount = cappedDelay * 0.2; // 20% jitter
+    const jitterValue = (Math.random() - 0.5) * 2 * jitterAmount;
+    finalDelay = cappedDelay + jitterValue;
+    
+    logger.debug('Retry: Applied jitter to delay', {
+      baseDelay: cappedDelay,
+      jitterAmount,
+      jitterValue: Math.round(jitterValue),
+      finalDelay: Math.round(finalDelay)
+    });
   }
 
-  return Math.max(0, Math.round(delay));
+  const calculatedDelay = Math.max(0, Math.round(finalDelay));
+  
+  logger.debug('Retry: Calculated retry delay', {
+    attempt: attemptNumber,
+    backoffStrategy: config.backoff,
+    baseDelay: Math.round(baseDelay),
+    wasCapped: baseDelay > config.maxDelay,
+    maxDelay: config.maxDelay,
+    jitterEnabled: config.jitter,
+    finalDelay: calculatedDelay
+  });
+
+  return calculatedDelay;
 };
 
 /**
@@ -156,6 +272,11 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
  * @returns {Function} Wrapped function
  */
 const withRetry = curry((options, fn) => {
+  logger.debug('Retry: Wrapping function with retry logic', {
+    functionName: fn.name || 'anonymous',
+    hasOptions: !!options
+  });
+  
   const retry = createRetry(options);
   return async (...args) => retry(fn, ...args);
 });
@@ -167,6 +288,11 @@ const withRetry = curry((options, fn) => {
  * @returns {Object} Wrapped client
  */
 const createRetryableClient = (client, options = {}) => {
+  logger.debug('Retry: Creating retryable HTTP client', {
+    clientType: client.constructor.name,
+    hasOptions: !!options
+  });
+  
   const retry = createRetry(options);
 
   return {
