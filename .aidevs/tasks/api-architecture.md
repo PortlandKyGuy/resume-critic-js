@@ -1169,8 +1169,8 @@ const rateLimiter = rateLimit({
 NODE_ENV=production
 PORT=8000
 
-# LLM Configuration
-OPENAI_API_KEY=sk-...
+# LLM Configuration (use secret manager in production)
+OPENAI_API_KEY_SECRET_NAME=resume-api/openai-key
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4
 LLM_TEMPERATURE=0.7
@@ -1183,17 +1183,120 @@ PROMPTS_VERSION=1.0.0
 MAX_PARALLEL_WORKERS=5
 CACHE_TTL=3600
 
+# Redis Configuration
+REDIS_URL=redis://redis:6379
+REDIS_CLUSTER_MODE=false
+
 # Security
-API_KEY_SECRET=...
+API_KEY_SECRET_NAME=resume-api/api-keys
 RATE_LIMIT_WINDOW=900000
 RATE_LIMIT_MAX=100
 
 # Monitoring
 LOG_LEVEL=info
 AUDIT_RETENTION_DAYS=90
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
 ```
 
-### 2. Docker Configuration
+### 2. Secret Management
+```javascript
+// src/utils/secrets.js
+class SecretManager {
+  constructor(provider = process.env.SECRET_PROVIDER || 'env') {
+    this.provider = this.createProvider(provider);
+  }
+  
+  createProvider(type) {
+    switch (type) {
+      case 'aws':
+        return new AWSSecretsProvider();
+      case 'vault':
+        return new HashicorpVaultProvider();
+      case 'doppler':
+        return new DopplerProvider();
+      default:
+        return new EnvProvider();
+    }
+  }
+  
+  async getSecret(name) {
+    return await this.provider.getSecret(name);
+  }
+}
+
+// Usage
+const secretManager = new SecretManager();
+const openaiKey = await secretManager.getSecret(process.env.OPENAI_API_KEY_SECRET_NAME);
+```
+
+### 3. Graceful Shutdown
+```javascript
+// src/app.js
+class Application {
+  constructor() {
+    this.server = null;
+    this.jobQueue = null;
+    this.connections = new Set();
+    this.isShuttingDown = false;
+  }
+  
+  async start() {
+    // Initialize components
+    this.jobQueue = new JobQueue(config.jobs);
+    
+    // Start server
+    this.server = app.listen(config.port, () => {
+      console.log(`Server running on port ${config.port}`);
+    });
+    
+    // Track connections
+    this.server.on('connection', (connection) => {
+      this.connections.add(connection);
+      connection.on('close', () => {
+        this.connections.delete(connection);
+      });
+    });
+    
+    // Setup shutdown handlers
+    process.on('SIGTERM', () => this.gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => this.gracefulShutdown('SIGINT'));
+  }
+  
+  async gracefulShutdown(signal) {
+    if (this.isShuttingDown) return;
+    
+    console.log(`\n${signal} received. Starting graceful shutdown...`);
+    this.isShuttingDown = true;
+    
+    // Stop accepting new requests
+    this.server.close(() => {
+      console.log('HTTP server closed');
+    });
+    
+    // Close existing connections after a grace period
+    setTimeout(() => {
+      this.connections.forEach(connection => connection.end());
+    }, 5000);
+    
+    // Stop job queue gracefully
+    if (this.jobQueue) {
+      await this.jobQueue.close();
+      console.log('Job queue closed');
+    }
+    
+    // Flush audit logs
+    if (this.auditLogger) {
+      await this.auditLogger.flush();
+      console.log('Audit logs flushed');
+    }
+    
+    // Exit
+    process.exit(0);
+  }
+}
+```
+
+### 4. Docker Configuration
 ```dockerfile
 FROM node:18-alpine
 
@@ -1218,7 +1321,176 @@ EXPOSE 8000
 CMD ["node", "src/app.js"]
 ```
 
-### 3. Scaling Considerations
+### 5. Production Deployment Architecture
+
+#### Kubernetes Deployment
+```yaml
+# k8s/api-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resume-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: resume-api
+  template:
+    metadata:
+      labels:
+        app: resume-api
+    spec:
+      containers:
+      - name: api
+        image: resume-api:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: WORKER_TYPE
+          value: "api"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resume-worker
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: resume-worker
+  template:
+    metadata:
+      labels:
+        app: resume-worker
+    spec:
+      containers:
+      - name: worker
+        image: resume-api:latest
+        env:
+        - name: WORKER_TYPE
+          value: "worker"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1000m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+```
+
+#### Monitoring Stack
+```javascript
+// src/monitoring/metrics.js
+const { MeterProvider } = require('@opentelemetry/sdk-metrics');
+const { PrometheusExporter } = require('@opentelemetry/exporter-prometheus');
+
+class MetricsCollector {
+  constructor() {
+    const exporter = new PrometheusExporter(
+      { port: 9090 },
+      () => console.log('Prometheus metrics server started')
+    );
+    
+    this.meterProvider = new MeterProvider();
+    this.meterProvider.addMetricReader(exporter);
+    
+    const meter = this.meterProvider.getMeter('resume-api');
+    
+    // Define metrics
+    this.evaluationCounter = meter.createCounter('evaluations_total', {
+      description: 'Total number of evaluations'
+    });
+    
+    this.evaluationDuration = meter.createHistogram('evaluation_duration_seconds', {
+      description: 'Duration of evaluation requests'
+    });
+    
+    this.llmRequestDuration = meter.createHistogram('llm_request_duration_seconds', {
+      description: 'Duration of LLM API calls'
+    });
+    
+    this.queueDepth = meter.createObservableGauge('job_queue_depth', {
+      description: 'Current depth of the job queue'
+    });
+  }
+  
+  recordEvaluation(labels, duration) {
+    this.evaluationCounter.add(1, labels);
+    this.evaluationDuration.record(duration, labels);
+  }
+  
+  recordLLMRequest(provider, model, duration) {
+    this.llmRequestDuration.record(duration, { provider, model });
+  }
+}
+```
+
+### 6. Security Hardening
+```javascript
+// src/api/security.js
+const helmet = require('helmet');
+const cors = require('cors');
+
+module.exports = function setupSecurity(app) {
+  // Basic security headers
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+      },
+    },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    }
+  }));
+  
+  // CORS configuration
+  app.use(cors({
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || false,
+    credentials: true,
+    maxAge: 86400
+  }));
+  
+  // Additional security middleware
+  app.use((req, res, next) => {
+    // Remove sensitive headers
+    res.removeHeader('X-Powered-By');
+    
+    // Add security headers
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    
+    next();
+  });
+};
+```
+
+### 7. Scaling Considerations
 - **Horizontal Scaling**: Stateless design allows multiple instances
 - **Load Balancing**: Round-robin or least-connections
 - **Database**: Consider read replicas for audit queries
