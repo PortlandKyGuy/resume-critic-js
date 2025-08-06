@@ -11,7 +11,7 @@ const applyRoutes = (app, routes) => {
 
 const createRoutes = () => [
   { path: '/', router: createHealthRoutes() },
-  { path: '/v1', router: createV1Routes() },
+  { path: '/', router: createV1Routes() },  // Mount v1 routes at root to match OpenAPI
   { path: '/v2', router: createV2Routes() }
 ];
 

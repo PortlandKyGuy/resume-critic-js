@@ -7,16 +7,16 @@ const createEvaluationValidator = () => validate([
     .withMessage('Job description is required')
     .isString()
     .withMessage('Job description must be a string')
-    .isLength({ min: 10 })
-    .withMessage('Job description must be at least 10 characters'),
+    .isLength({ min: 100 })
+    .withMessage('Job description must be at least 100 characters'),
 
   body('resume')
     .notEmpty()
     .withMessage('Resume is required')
     .isString()
     .withMessage('Resume must be a string')
-    .isLength({ min: 10 })
-    .withMessage('Resume must be at least 10 characters'),
+    .isLength({ min: 100 })
+    .withMessage('Resume must be at least 100 characters'),
 
   body('required_terms')
     .optional()
@@ -31,13 +31,21 @@ const createEvaluationValidator = () => validate([
   body('process_markdown')
     .optional()
     .isBoolean()
-    .withMessage('Process markdown must be a boolean'),
+    .withMessage('Process markdown must be a boolean')
+    .default(true),
+
+  body('max_workders')
+  .optional()
+  .default(6)
+  .isInt({min: 1, max: 10})
+  .withMessage('Maximum number of parallel critic workers (1-10)')
+  ,
 
   body('industry')
     .optional()
     .isString()
     .withMessage('Industry must be a string')
-    .isIn(['general', 'software-engineering', 'finance', 'healthcare', 'education'])
+    .isIn(['general', 'software-engineering'])
     .withMessage('Invalid industry')
 ]);
 

@@ -1,4 +1,4 @@
-const keywordCritic = (jobDescription, resume, requiredTerms) => {
+const keywordCritic = (jobDescription, resume, requiredTerms = null) => {
     // If specific terms are provided, use them. Otherwise, ask LLM to infer.
     const requiredTermsGuidance = requiredTerms 
         ? `REQUIRED TERMS (provided):\n${requiredTerms}`

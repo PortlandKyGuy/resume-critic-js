@@ -1,5 +1,4 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { curry } = require('ramda');
 const { LLMProviderError } = require('../../utils/errors');
 const { logger } = require('../../utils/logger');
 
@@ -9,132 +8,135 @@ const { logger } = require('../../utils/logger');
  * @param {Object} defaults - Default options
  * @returns {Function} Complete function
  */
-const createGeminiComplete = curry(async (genAI, defaults, options) => {
-  const startTime = Date.now();
+const createGeminiComplete = (genAI, defaults) => {
+  // Return a function that captures genAI and defaults in its closure
+  return async (options) => {
+    const startTime = Date.now();
 
-  logger.debug('Gemini: Starting completion request', {
-    hasSystem: !!options.system,
-    userPromptLength: options.user?.length,
-    temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
-    model: options.model || defaults.model
-  });
-
-  try {
-    const model = genAI.getGenerativeModel({
+    logger.debug('Gemini: Starting completion request', {
+      hasSystem: !!options.system,
+      userPromptLength: options.user?.length,
+      temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
       model: options.model || defaults.model
     });
 
-    // Build prompt with system message if provided
-    const prompt = options.system
-      ? `${options.system}\n\n${options.user}`
-      : options.user;
-
-    if (options.system) {
-      logger.debug('Gemini: Combined system and user prompts', {
-        combinedLength: prompt.length
+    try {
+      const model = genAI.getGenerativeModel({
+        model: options.model || defaults.model
       });
-    }
 
-    // Configure generation settings
-    const generationConfig = {
-      temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
-      maxOutputTokens: options.maxTokens || defaults.maxTokens,
-      topP: options.topP,
-      topK: options.topK,
-      candidateCount: 1
-    };
+      // Build prompt with system message if provided
+      const prompt = options.system
+        ? `${options.system}\n\n${options.user}`
+        : options.user;
 
-    // Add safety settings if needed
-    const safetySettings = options.safetySettings || [
-      {
-        category: 'HARM_CATEGORY_HARASSMENT',
-        threshold: 'BLOCK_NONE'
-      },
-      {
-        category: 'HARM_CATEGORY_HATE_SPEECH',
-        threshold: 'BLOCK_NONE'
-      },
-      {
-        category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-        threshold: 'BLOCK_NONE'
-      },
-      {
-        category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-        threshold: 'BLOCK_NONE'
+      if (options.system) {
+        logger.debug('Gemini: Combined system and user prompts', {
+          combinedLength: prompt.length
+        });
       }
-    ];
 
-    logger.debug('Gemini: Sending request', {
-      model: options.model || defaults.model,
-      promptLength: prompt.length,
-      maxOutputTokens: generationConfig.maxOutputTokens,
-      temperature: generationConfig.temperature,
-      hasOptionalParams: !!(options.topP || options.topK),
-      safetyThreshold: safetySettings[0]?.threshold
-    });
+      // Configure generation settings
+      const generationConfig = {
+        temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
+        maxOutputTokens: options.maxTokens || defaults.maxTokens,
+        topP: options.topP,
+        topK: options.topK,
+        candidateCount: 1
+      };
 
-    const result = await model.generateContent({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig,
-      safetySettings
-    });
+      // Add safety settings if needed
+      const safetySettings = options.safetySettings || [
+        {
+          category: 'HARM_CATEGORY_HARASSMENT',
+          threshold: 'BLOCK_NONE'
+        },
+        {
+          category: 'HARM_CATEGORY_HATE_SPEECH',
+          threshold: 'BLOCK_NONE'
+        },
+        {
+          category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+          threshold: 'BLOCK_NONE'
+        },
+        {
+          category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+          threshold: 'BLOCK_NONE'
+        }
+      ];
 
-    const { response } = result;
-
-    // Check for safety or other finish reasons
-    if (response.candidates && response.candidates[0]) {
-      const candidate = response.candidates[0];
-
-      logger.debug('Gemini: Response candidate info', {
-        finishReason: candidate.finishReason,
-        safetyRatings: candidate.safetyRatings
+      logger.debug('Gemini: Sending request', {
+        model: options.model || defaults.model,
+        promptLength: prompt.length,
+        maxOutputTokens: generationConfig.maxOutputTokens,
+        temperature: generationConfig.temperature,
+        hasOptionalParams: !!(options.topP || options.topK),
+        safetyThreshold: safetySettings[0]?.threshold
       });
 
-      if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-        logger.warn('Gemini: Response blocked', {
+      const result = await model.generateContent({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig,
+        safetySettings
+      });
+
+      const { response } = result;
+
+      // Check for safety or other finish reasons
+      if (response.candidates && response.candidates[0]) {
+        const candidate = response.candidates[0];
+
+        logger.debug('Gemini: Response candidate info', {
           finishReason: candidate.finishReason,
           safetyRatings: candidate.safetyRatings
         });
-        throw new Error(`Response blocked: ${candidate.finishReason}`);
+
+        if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+          logger.warn('Gemini: Response blocked', {
+            finishReason: candidate.finishReason,
+            safetyRatings: candidate.safetyRatings
+          });
+          throw new Error(`Response blocked: ${candidate.finishReason}`);
+        }
       }
+
+      const text = response.text();
+      const duration = Date.now() - startTime;
+
+      if (!text) {
+        logger.error('Gemini: Empty response received', { duration });
+        throw new Error('Empty response from Gemini');
+      }
+
+      logger.info('Gemini: Completion successful', {
+        duration,
+        responseLength: text.length,
+        finishReason: response.candidates?.[0]?.finishReason
+      });
+
+      logger.debug('Gemini: Response preview', {
+        preview: text.substring(0, 100) + (text.length > 100 ? '...' : '')
+      });
+
+      return text;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+
+      logger.error('Gemini: Request failed', {
+        duration,
+        errorMessage: error.message,
+        errorCode: error.code,
+        model: options.model || defaults.model
+      });
+
+      throw new LLMProviderError(
+        `Gemini API error: ${error.message}`,
+        'gemini',
+        error
+      );
     }
-
-    const text = response.text();
-    const duration = Date.now() - startTime;
-
-    if (!text) {
-      logger.error('Gemini: Empty response received', { duration });
-      throw new Error('Empty response from Gemini');
-    }
-
-    logger.info('Gemini: Completion successful', {
-      duration,
-      responseLength: text.length,
-      finishReason: response.candidates?.[0]?.finishReason
-    });
-
-    logger.debug('Gemini: Response preview', {
-      preview: text.substring(0, 100) + (text.length > 100 ? '...' : '')
-    });
-
-    return text;
-  } catch (error) {
-    const duration = Date.now() - startTime;
-
-    logger.error('Gemini: Request failed', {
-      duration,
-      errorMessage: error.message,
-      errorCode: error.code,
-      model: options.model || defaults.model
-    });
-
-    throw new LLMProviderError(
-      `Gemini API error: ${error.message}`,
-      'gemini',
-      error
-    );
-  }
-});
+  };
+};
 
 /**
  * Create Google Gemini provider
