@@ -38,7 +38,7 @@ describe('/v2/evaluate endpoint', () => {
 
     it('should return batch evaluation results with all critics', async () => {
       const response = await request(app)
-        .post('/v2/evaluation/evaluate')
+        .post('/v2/evaluate')
         .send(validRequest)
         .expect(200);
 
@@ -69,7 +69,7 @@ describe('/v2/evaluate endpoint', () => {
 
     it('should normalize scores correctly', async () => {
       const response = await request(app)
-        .post('/v2/evaluation/evaluate')
+        .post('/v2/evaluate')
         .send(validRequest)
         .expect(200);
 
@@ -81,7 +81,7 @@ describe('/v2/evaluate endpoint', () => {
 
     it('should calculate pass/fail based on threshold', async () => {
       const response = await request(app)
-        .post('/v2/evaluation/evaluate')
+        .post('/v2/evaluate')
         .send(validRequest)
         .expect(200);
 
@@ -96,7 +96,7 @@ describe('/v2/evaluate endpoint', () => {
       };
 
       const response = await request(app)
-        .post('/v2/evaluation/evaluate')
+        .post('/v2/evaluate')
         .send(minimalRequest)
         .expect(200);
 
@@ -111,14 +111,14 @@ describe('/v2/evaluate endpoint', () => {
       };
 
       await request(app)
-        .post('/v2/evaluation/evaluate')
+        .post('/v2/evaluate')
         .send(invalidRequest)
         .expect(400);
     });
 
     it('should include execution time', async () => {
       const response = await request(app)
-        .post('/v2/evaluation/evaluate')
+        .post('/v2/evaluate')
         .send(validRequest)
         .expect(200);
 

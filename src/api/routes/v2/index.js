@@ -4,18 +4,18 @@ const { createEvaluationRoutes } = require('./evaluation.routes');
 const createV2Routes = () => {
   const router = express.Router();
 
-  // Apply sub-routes
-  router.use('/evaluation', createEvaluationRoutes());
+  // Mount evaluation routes directly at v2 root
+  const evaluationRoutes = createEvaluationRoutes();
+  router.use('/', evaluationRoutes);
 
-  // V2 root endpoint
-  router.get('/', (req, res) => {
+  // V2 info endpoint at /v2/info
+  router.get('/info', (req, res) => {
     res.json({
       version: 'v2',
       description: 'Enhanced API with job-fit awareness',
       endpoints: {
         evaluation: {
-          evaluate: 'POST /v2/evaluation/evaluate',
-          evaluateWithJobFit: 'POST /v2/evaluation/evaluate-with-job-fit'
+          evaluate: 'POST /v2/evaluate'
         }
       }
     });

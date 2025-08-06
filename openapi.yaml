@@ -660,7 +660,7 @@ paths:
         500:
           $ref: '#/components/responses/ServerError'
 
-  /v2/evaluation/evaluate:
+  /v2/evaluate:
     post:
       summary: Evaluate Resume (V2)
       description: |
