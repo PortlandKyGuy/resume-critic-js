@@ -66,11 +66,38 @@ const generateBatchEvaluationResponse = () => JSON.stringify({
   ]
 });
 
+
 /**
  * Get default mock responses
  * @returns {Object} Default response mappings
  */
 const getDefaultResponses = () => ({
+  // Keyword critic response - matches the prompt pattern
+  'must-have': JSON.stringify({
+    score: 0.8,
+    missing_must_have: [],
+    missing_nice_have: ['GraphQL', 'Docker'],
+    present_terms: ['Node.js', 'React', 'AWS', 'Software Engineer'],
+    suggestions: ['Consider adding experience with Docker if applicable']
+  }),
+  // Readability critic response
+  'readability': JSON.stringify({
+    appropriateness_score: 0.85,
+    flesch_kincaid_score: 45.2,
+    issues: [],
+    suggestions: ['Consider using more action verbs']
+  }),
+  // Relevance critic response
+  'relevance score': JSON.stringify({
+    score: 4,
+    reasoning: 'Strong alignment with job requirements, relevant experience highlighted'
+  }),
+  // Language critic response
+  'language quality': JSON.stringify({
+    score: 4,
+    errors: [],
+    suggestions: ['Add more quantifiable achievements']
+  }),
   'job fit': JSON.stringify({
     job_fit_score: 0.78,
     match_category: 'good',
@@ -154,6 +181,7 @@ const createMockComplete = curry(async (responses, options) => {
     });
     return response;
   }
+  
 
   const defaultResponse = `Mock response for: ${options.user.substring(0, 50)}`;
   const duration = Date.now() - startTime;
