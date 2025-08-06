@@ -82,15 +82,16 @@ const createEvaluationRoutes = () => {
       console.log(`Raw response for ${criticType}:`, `${response.substring(0, 200)}...`);
 
       // Clean the response - remove markdown code blocks if present
-      const cleanedResponseBase = response.trim();
-      let cleanedResponse = cleanedResponseBase;
-
-      // Remove markdown JSON code blocks
-      if (cleanedResponse.startsWith('```json')) {
-        cleanedResponse = cleanedResponse.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '');
-      } else if (cleanedResponse.startsWith('```')) {
-        cleanedResponse = cleanedResponse.replace(/^```\s*\n?/, '').replace(/\n?```\s*$/, '');
-      }
+      const cleanedResponse = (() => {
+        const trimmed = response.trim();
+        if (trimmed.startsWith('```json')) {
+          return trimmed.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '');
+        }
+        if (trimmed.startsWith('```')) {
+          return trimmed.replace(/^```\s*\n?/, '').replace(/\n?```\s*$/, '');
+        }
+        return trimmed;
+      })();
 
       // Try to parse as JSON
       const parsed = JSON.parse(cleanedResponse);
@@ -129,14 +130,15 @@ const createEvaluationRoutes = () => {
         rawResults[critic] = parsedResult;
 
         // Extract score for normalization
-        let score = 0;
-        if (critic === 'readability') {
-          score = parsedResult;
-        } else if (typeof parsedResult === 'object' && parsedResult !== null) {
-          score = parsedResult.score || 0;
-        } else {
-          score = 0;
-        }
+        const score = (() => {
+          if (critic === 'readability') {
+            return parsedResult;
+          }
+          if (typeof parsedResult === 'object' && parsedResult !== null) {
+            return parsedResult.score || 0;
+          }
+          return 0;
+        })();
 
         normalizedScores[critic] = normalizeScore(critic, score);
       } catch (error) {

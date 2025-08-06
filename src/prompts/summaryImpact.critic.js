@@ -1,36 +1,29 @@
 const summaryImpactCritic = (jobDescription, resume, extra) => {
-  let tailoredSummary = '';
-  let originalResume = resume;
+  const tailoredSummary = (extra && typeof extra === 'object') ? (extra.tailored_summary || '') : '';
+  const originalResume = (extra && typeof extra === 'object') ? (extra.original_resume || resume) : resume;
 
-  if (extra && typeof extra === 'object') {
-    tailoredSummary = extra.tailored_summary || '';
-    originalResume = extra.original_resume || resume;
-  }
-
-  let userPrompt = ` JOB DESCRIPTION:
+  const basePrompt = ` JOB DESCRIPTION:
         ${jobDescription}
         
         `;
 
-  if (tailoredSummary) {
-    userPrompt += `ORIGINAL RESUME:
+  const contentPrompt = tailoredSummary
+    ? `ORIGINAL RESUME:
         ${originalResume}
         
         TAILORED SUMMARY TO EVALUATE:
         ${tailoredSummary}
         
         Evaluate the impact and persuasiveness of this tailored summary.
-        `;
-  } else {
-    userPrompt += `RESUME:
+        `
+    : `RESUME:
         ${resume}
         
         Evaluate the impact of the resume summary (if present).
         If no summary exists, return score 0.0 and explain the missed opportunity.
         `;
-  }
 
-  userPrompt += `
+  const userPrompt = `${basePrompt}${contentPrompt}
         Assess:
         - Opening strength: Does it grab attention immediately?
         - Value clarity: Is the candidate's unique value crystal clear?

@@ -48,23 +48,15 @@ Evaluate the relevance of this work experience to the job requirements.`
 };
 
 function formatWorkExperience(experienceData) {
-  let experiences;
-  if (typeof experienceData === 'object' && experienceData.experiences) {
-    experiences = experienceData.experiences;
-  } else {
-    experiences = experienceData;
-  }
+  const experiences = (typeof experienceData === 'object' && experienceData.experiences)
+    ? experienceData.experiences
+    : experienceData;
 
-  const textParts = [];
-  for (const exp of experiences) {
-    textParts.push(`\n${exp.title || 'Unknown Title'} - ${exp.company || 'Unknown Company'}`);
-    textParts.push(`${exp.dates || 'No dates provided'}`);
-    if (exp.responsibilities) {
-      for (const resp of exp.responsibilities) {
-        textParts.push(`  • ${resp}`);
-      }
-    }
-  }
+  const textParts = experiences.flatMap(exp => [
+    `\n${exp.title || 'Unknown Title'} - ${exp.company || 'Unknown Company'}`,
+    `${exp.dates || 'No dates provided'}`,
+    ...(exp.responsibilities || []).map(resp => `  • ${resp}`)
+  ]);
 
   return textParts.join('\n');
 }

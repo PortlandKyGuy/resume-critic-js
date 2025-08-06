@@ -1,16 +1,9 @@
 const summaryFidelityCritic = (jobDescription, resume, extra) => {
-  let tailoredSummary = '';
-  let originalResume = resume;
+  const tailoredSummary = (extra && typeof extra === 'object') ? (extra.tailored_summary || '') : '';
+  const originalResume = (extra && typeof extra === 'object') ? (extra.original_resume || resume) : resume;
 
-  if (extra && typeof extra === 'object') {
-    tailoredSummary = extra.tailored_summary || '';
-    originalResume = extra.original_resume || resume;
-  }
-
-  let userPrompt;
-
-  if (!tailoredSummary) {
-    userPrompt = ` JOB DESCRIPTION:
+  const userPrompt = !tailoredSummary
+    ? ` JOB DESCRIPTION:
         ${jobDescription}
         
         RESUME:
@@ -18,9 +11,8 @@ const summaryFidelityCritic = (jobDescription, resume, extra) => {
         
         This resume does not have a separate tailored summary to evaluate.
         If there's a summary in the resume, evaluate its truthfulness.
-        If no summary exists, return score 1.0 (no fidelity issues in non-existent summary).`;
-  } else {
-    userPrompt = ` JOB DESCRIPTION:
+        If no summary exists, return score 1.0 (no fidelity issues in non-existent summary).`
+    : ` JOB DESCRIPTION:
         ${jobDescription}
         
         ORIGINAL RESUME:
@@ -43,7 +35,6 @@ const summaryFidelityCritic = (jobDescription, resume, extra) => {
         
         Provide specific examples of any concerns and suggestions for maintaining
         both truthfulness and effectiveness.`;
-  }
 
   return {
     systemPrompt: `You are an expert resume reviewer specializing in verifying the accuracy and truthfulness of professional summaries.

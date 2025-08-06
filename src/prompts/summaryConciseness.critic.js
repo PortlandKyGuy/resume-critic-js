@@ -1,33 +1,25 @@
 const summaryConcisenessCritic = (jobDescription, resume, extra) => {
-  let tailoredSummary = '';
-  let originalResume = resume;
+  const tailoredSummary = (extra && typeof extra === 'object') ? (extra.tailored_summary || '') : '';
 
-  if (extra && typeof extra === 'object') {
-    tailoredSummary = extra.tailored_summary || '';
-    originalResume = extra.original_resume || resume;
-  }
-
-  let userPrompt = ` JOB DESCRIPTION:
+  const basePrompt = ` JOB DESCRIPTION:
         ${jobDescription}
         
         `;
 
-  if (tailoredSummary) {
-    userPrompt += `TAILORED SUMMARY TO EVALUATE:
+  const contentPrompt = tailoredSummary
+    ? `TAILORED SUMMARY TO EVALUATE:
         ${tailoredSummary}
         
         Evaluate the conciseness and clarity of this tailored summary.
-        `;
-  } else {
-    userPrompt += `RESUME:
+        `
+    : `RESUME:
         ${resume}
         
         Evaluate the conciseness of the resume summary (if present).
         If no summary exists, return score 0.0 and note the absence.
         `;
-  }
 
-  userPrompt += `
+  const userPrompt = `${basePrompt}${contentPrompt}
         Analyze:
         - Length: Is it appropriately brief (2-4 sentences, 50-100 words ideal)?
         - Density: Does every word contribute meaningful information?

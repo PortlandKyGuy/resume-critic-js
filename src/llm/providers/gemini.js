@@ -83,6 +83,7 @@ const createGeminiComplete = (genAI, defaults) => async options => {
 
     // Check for safety or other finish reasons
     if (response.candidates && response.candidates[0]) {
+      // eslint-disable-next-line prefer-destructuring
       const candidate = response.candidates[0];
 
       logger.debug('Gemini: Response candidate info', {

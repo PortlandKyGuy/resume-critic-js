@@ -1,33 +1,25 @@
 const summaryKeywordCritic = (jobDescription, resume, extra) => {
-  let tailoredSummary = '';
-  let originalResume = resume;
+  const tailoredSummary = (extra && typeof extra === 'object') ? (extra.tailored_summary || '') : '';
 
-  if (extra && typeof extra === 'object') {
-    tailoredSummary = extra.tailored_summary || '';
-    originalResume = extra.original_resume || resume;
-  }
-
-  let userPrompt = ` JOB DESCRIPTION:
+  const basePrompt = ` JOB DESCRIPTION:
         ${jobDescription}
         
         `;
 
-  if (tailoredSummary) {
-    userPrompt += `TAILORED SUMMARY TO EVALUATE:
+  const contentPrompt = tailoredSummary
+    ? `TAILORED SUMMARY TO EVALUATE:
         ${tailoredSummary}
         
         Evaluate keyword usage in this tailored summary.
-        `;
-  } else {
-    userPrompt += `RESUME:
+        `
+    : `RESUME:
         ${resume}
         
         Evaluate keyword usage in the resume summary (if present).
         If no summary exists, return score 0.0 and note critical missing keywords.
         `;
-  }
 
-  userPrompt += `
+  const userPrompt = `${basePrompt}${contentPrompt}
         Identify and evaluate:
         
         1. Critical Technical Keywords:
