@@ -18,8 +18,8 @@ const createEvaluationRoutes = () => {
   };
 
   // Extract evaluation parameters from request
-  const extractEvaluationParams = (body) => {
-    return {
+  const extractEvaluationParams = body => (
+    ({
       job_description: body.job_description,
       resume: body.resume,
       original_resume: body.original_resume || null,
@@ -28,21 +28,22 @@ const createEvaluationRoutes = () => {
       temperature: body.temperature || 0.7,
       process_markdown: body.process_markdown !== false,
       max_workers: body.max_workers || 6
-    };
-  };
+    })
+  );
 
   // Normalize scores to 0-1 range
   const normalizeScore = (criticName, score) => {
     switch (criticName) {
       case 'relevance':
-      case 'language':
+      case 'language': {
         // These critics use 1-5 scale
         const numScore = typeof score === 'number' ? score : 0;
         if (numScore >= 1 && numScore <= 5) {
           return (numScore - 1) / 4;
         }
         return 0;
-      
+      }
+
       case 'readability':
         // Readability uses appropriateness_score
         if (typeof score === 'object' && score !== null) {
@@ -50,19 +51,20 @@ const createEvaluationRoutes = () => {
           return appScore >= 0 && appScore <= 1 ? appScore : 0;
         }
         return 0;
-      
-      case 'keyword':
+
+      case 'keyword': {
         // Keyword already uses 0-1 scale
         const keywordScore = typeof score === 'number' ? score : 0;
         return keywordScore >= 0 && keywordScore <= 1 ? keywordScore : 0;
-      
+      }
+
       default:
         return 0;
     }
   };
 
   // Extract the actual score value from a critic result
-  const extractScoreValue = (criticResult) => {
+  const extractScoreValue = criticResult => {
     if (typeof criticResult === 'number') return criticResult;
     if (criticResult && typeof criticResult === 'object') {
       if ('score' in criticResult) return criticResult.score;
@@ -75,31 +77,31 @@ const createEvaluationRoutes = () => {
   const aggregateScores = (results, weights) => {
     const normalizedScores = {};
     const rawResults = {};
-    let weightedSum = 0;
-    let totalWeight = 0;
+    const weightedSum = { value: 0 };
+    const totalWeight = { value: 0 };
 
     results.forEach((result, index) => {
       const criticNames = ['keyword', 'readability', 'relevance', 'language'];
       const criticName = criticNames[index];
-      
+
       if (result && criticName) {
         // Store raw result
-        rawResults[criticName] = result;
-        
+        Object.assign(rawResults, { [criticName]: result });
+
         // Normalize score
         const scoreValue = extractScoreValue(result);
         const normalized = normalizeScore(criticName, scoreValue);
-        normalizedScores[criticName] = normalized;
-        
+        Object.assign(normalizedScores, { [criticName]: normalized });
+
         // Add to weighted sum
         if (weights[criticName]) {
-          weightedSum += normalized * weights[criticName];
-          totalWeight += weights[criticName];
+          weightedSum.value += normalized * weights[criticName];
+          totalWeight.value += weights[criticName];
         }
       }
     });
 
-    const compositeScore = totalWeight > 0 ? weightedSum / totalWeight : 0;
+    const compositeScore = totalWeight.value > 0 ? weightedSum.value / totalWeight.value : 0;
 
     return {
       composite_score: compositeScore,
@@ -112,7 +114,7 @@ const createEvaluationRoutes = () => {
   const createEvaluationHandler = () => asyncHandler(async (req, res) => {
     const startTime = Date.now();
     const params = extractEvaluationParams(req.body);
-    
+
     try {
       // Create LLM client
       const client = await createLLMClient({
@@ -132,40 +134,38 @@ const createEvaluationRoutes = () => {
 
       // Execute all critics in parallel (same as v1)
       const results = await Promise.all(
-        critics.map(critic => 
-          client.complete({
-            system: critic.systemPrompt,
-            user: critic.userPrompt
-          }).then(response => {
-            try {
-              // Clean and parse response
-              const cleaned = response
-                .trim()
-                .replace(/^```(?:json)?\s*\n?/, '')
-                .replace(/\n?```\s*$/, '');
-              return JSON.parse(cleaned);
-            } catch (error) {
-              logger.error('Failed to parse critic response', { 
-                error: error.message,
-                response: response.substring(0, 200)
-              });
-              return null;
-            }
-          })
-        )
+        critics.map(critic => client.complete({
+          system: critic.systemPrompt,
+          user: critic.userPrompt
+        }).then(response => {
+          try {
+            // Clean and parse response
+            const cleaned = response
+              .trim()
+              .replace(/^```(?:json)?\s*\n?/, '')
+              .replace(/\n?```\s*$/, '');
+            return JSON.parse(cleaned);
+          } catch (error) {
+            logger.error('Failed to parse critic response', {
+              error: error.message,
+              response: response.substring(0, 200)
+            });
+            return null;
+          }
+        }))
       );
 
       // Aggregate results
       const threshold = getConfig('evaluation.threshold', 0.75);
-      const { composite_score, normalized_scores, raw_results } = aggregateScores(results, DEFAULT_WEIGHTS);
-      
+      const { composite_score: compositeScore, normalized_scores: normalizedScores, raw_results: rawResults } = aggregateScores(results, DEFAULT_WEIGHTS);
+
       // Build response
       const executionTime = (Date.now() - startTime) / 1000;
       const response = {
-        composite_score,
-        normalized_scores,
-        raw_results,
-        pass: composite_score >= threshold,
+        composite_score: compositeScore,
+        normalized_scores: normalizedScores,
+        raw_results: rawResults,
+        pass: compositeScore >= threshold,
         threshold,
         jd_file: 'job_description.txt',
         resume_file: 'resume.txt',
@@ -179,7 +179,7 @@ const createEvaluationRoutes = () => {
       };
 
       logger.info('V2 Evaluation completed', {
-        composite_score,
+        composite_score: compositeScore,
         pass: response.pass,
         execution_time: executionTime
       });

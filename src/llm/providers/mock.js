@@ -66,7 +66,6 @@ const generateBatchEvaluationResponse = () => JSON.stringify({
   ]
 });
 
-
 /**
  * Get default mock responses
  * @returns {Object} Default response mappings
@@ -81,7 +80,7 @@ const getDefaultResponses = () => ({
     suggestions: ['Consider adding experience with Docker if applicable']
   }),
   // Readability critic response
-  'readability': JSON.stringify({
+  readability: JSON.stringify({
     appropriateness_score: 0.85,
     flesch_kincaid_score: 45.2,
     issues: [],
@@ -181,7 +180,6 @@ const createMockComplete = curry(async (responses, options) => {
     });
     return response;
   }
-  
 
   const defaultResponse = `Mock response for: ${options.user.substring(0, 50)}`;
   const duration = Date.now() - startTime;
