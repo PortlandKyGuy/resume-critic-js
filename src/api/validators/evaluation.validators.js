@@ -74,7 +74,51 @@ const createComparisonValidator = () => validate([
     .withMessage('Resume identifier must be a string')
 ]);
 
+const createCoverLetterValidator = () => validate([
+  body('job_description')
+    .notEmpty()
+    .withMessage('Job description is required')
+    .isString()
+    .withMessage('Job description must be a string')
+    .isLength({ min: 100 })
+    .withMessage('Job description must be at least 100 characters'),
+
+  body('original_resume')
+    .notEmpty()
+    .withMessage('Original resume is required')
+    .isString()
+    .withMessage('Original resume must be a string')
+    .isLength({ min: 100 })
+    .withMessage('Original resume must be at least 100 characters'),
+
+  body('cover_letter')
+    .notEmpty()
+    .withMessage('Cover letter is required')
+    .isString()
+    .withMessage('Cover letter must be a string')
+    .isLength({ min: 50 })
+    .withMessage('Cover letter must be at least 50 characters'),
+
+  body('provider')
+    .optional()
+    .isString()
+    .withMessage('Provider must be a string')
+    .isIn(['openai', 'gemini', 'ollama', 'mock'])
+    .withMessage('Invalid provider'),
+
+  body('model')
+    .optional()
+    .isString()
+    .withMessage('Model must be a string'),
+
+  body('temperature')
+    .optional()
+    .isFloat({ min: 0, max: 2 })
+    .withMessage('Temperature must be between 0 and 2')
+]);
+
 module.exports = {
   createEvaluationValidator,
-  createComparisonValidator
+  createComparisonValidator,
+  createCoverLetterValidator
 };
