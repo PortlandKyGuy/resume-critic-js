@@ -185,10 +185,15 @@ const createEvaluationRoutes = () => {
       { type: 'language', ...prompts.languageCritic(jobDescription, resume) }
     ];
 
+    // Get LLM config
+    const { getConfig } = require('../../../utils/config');
+    const useMock = getConfig('llm.useMock', false);
+    
     const client = await createLLMClient({ 
       provider,
       model,
-      temperature 
+      temperature,
+      useMock 
     });
     
     // Execute all critics in parallel
@@ -213,7 +218,6 @@ const createEvaluationRoutes = () => {
     const scoreResults = aggregateScores(criticResults);
     
     // Get config for threshold
-    const { getConfig } = require('../../../utils/config');
     const threshold = getConfig('evaluation.threshold', 0.75);
     
     // Calculate execution time

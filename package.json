@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "USE_MOCK_LLM=true nodemon src/app.js",
-    "dev:real": "nodemon src/app.js",
+    "dev": "NODE_ENV=development nodemon src/app.js",
+    "dev:real": "NODE_ENV=development nodemon src/app.js",
     "test": "USE_MOCK_LLM=true jest",
     "test:integration": "USE_MOCK_LLM=true jest --testPathPattern=integration",
     "test:llm": "node scripts/test-llm.js",
