@@ -93,6 +93,38 @@ npm test
 - `POST /v2/evaluation/evaluate` - Enhanced evaluation with job-fit scoring
 - `POST /v2/evaluation/evaluate-with-job-fit` - Dedicated job-fit evaluation
 
+## Architecture
+
+### LLM Integration
+
+The API supports multiple LLM providers:
+- OpenAI (GPT-3.5, GPT-4)
+- Google Gemini
+- Ollama (local models)
+- Mock provider for development
+
+### Prompt Management System
+
+The application uses a sophisticated prompt management system:
+
+- **Template Engine**: Custom template system with variable substitution, conditionals, and loops
+- **Base Prompts**: Core evaluation prompts with industry-specific variations
+- **Critic Prompts**: Specialized prompts for each evaluation criterion
+- **Prompt Composition**: Dynamic prompt generation based on job requirements
+- **Version Management**: Support for A/B testing and prompt versioning
+
+### Critics
+
+The evaluation system uses multiple critics to provide comprehensive feedback:
+
+- **Keyword**: ATS optimization and keyword relevance
+- **Experience**: Professional experience evaluation
+- **Impact**: Achievement quantification and business value
+- **Readability**: Format and presentation quality
+- **Completeness**: Resume section completeness
+- **Relevance**: Job-role alignment
+- **Requirements**: Specific requirement matching
+
 ## Environment Variables
 
 - `NODE_ENV` - Environment mode (development, production, test)
