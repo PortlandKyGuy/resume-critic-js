@@ -1,19 +1,19 @@
 const summaryRelevanceCritic = (jobDescription, resume, extra) => {
-    let tailoredSummary = '';
-    let originalResume = resume;
-    
-    if (extra && typeof extra === 'object') {
-        tailoredSummary = extra.tailored_summary || '';
-        originalResume = extra.original_resume || resume;
-    }
-    
-    let userPrompt = ` JOB DESCRIPTION:
+  let tailoredSummary = '';
+  let originalResume = resume;
+
+  if (extra && typeof extra === 'object') {
+    tailoredSummary = extra.tailored_summary || '';
+    originalResume = extra.original_resume || resume;
+  }
+
+  let userPrompt = ` JOB DESCRIPTION:
         ${jobDescription}
         
         `;
-    
-    if (tailoredSummary) {
-        userPrompt += `ORIGINAL RESUME:
+
+  if (tailoredSummary) {
+    userPrompt += `ORIGINAL RESUME:
         ${originalResume}
         
         TAILORED SUMMARY TO EVALUATE:
@@ -21,16 +21,16 @@ const summaryRelevanceCritic = (jobDescription, resume, extra) => {
         
         Evaluate how well this tailored summary aligns with the job requirements.
         `;
-    } else {
-        userPrompt += `RESUME:
+  } else {
+    userPrompt += `RESUME:
         ${resume}
         
         Evaluate the resume summary (if present) for alignment with this specific job.
         If no summary exists, return score 0.0 and suggest adding one.
         `;
-    }
-    
-    userPrompt += `
+  }
+
+  userPrompt += `
         Focus on:
         - Does the summary immediately demonstrate fit for THIS role?
         - Are the most critical job requirements addressed?
@@ -40,7 +40,7 @@ const summaryRelevanceCritic = (jobDescription, resume, extra) => {
         
         Provide specific, actionable suggestions for improvement.`;
 
-    return {
+  return {
     systemPrompt: `You are an expert resume reviewer specializing in evaluating professional summaries for job relevance.
         
         Evaluate the resume summary based on alignment with the target job requirements:
@@ -62,8 +62,8 @@ const summaryRelevanceCritic = (jobDescription, resume, extra) => {
             "suggestions": []  // Specific improvements for better job alignment
         }`,
 
-    userPrompt: userPrompt
-    };
-}
+    userPrompt
+  };
+};
 
-module.exports = { summaryRelevanceCritic }
+module.exports = { summaryRelevanceCritic };

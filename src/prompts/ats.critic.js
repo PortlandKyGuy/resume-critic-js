@@ -1,8 +1,5 @@
-
-const atsCritic = (jobDescription, resume) => {
-
-    return {
-    systemPrompt: `You are an ATS (Applicant Tracking System) expert. Your job is to 
+const atsCritic = (jobDescription, resume) => ({
+  systemPrompt: `You are an ATS (Applicant Tracking System) expert. Your job is to 
         evaluate how well a resume would parse in modern ATS software.
         
         Focus on these aspects:
@@ -22,7 +19,7 @@ const atsCritic = (jobDescription, resume) => {
         }
         Example: {"score":0.9,"critical_issues_found":false,"issues":["Inconsistent date format"],"suggestions":["Use MM/YYYY format consistently."]}`,
 
-    userPrompt: ` JOB DESCRIPTION:
+  userPrompt: ` JOB DESCRIPTION:
         ${jobDescription}
         
         RESUME:
@@ -39,7 +36,6 @@ const atsCritic = (jobDescription, resume) => {
 
         Also consider if the resume's format and section structure is appropriate for the job targeted in the job description.
         Provide an overall score reflecting compatibility, list specific issues, and note if critical parsing issues were found.`
-    };
-}
+});
 
-module.exports = { atsCritic }
+module.exports = { atsCritic };

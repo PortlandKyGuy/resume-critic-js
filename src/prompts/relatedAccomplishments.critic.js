@@ -1,7 +1,5 @@
-const relatedAccomplishmentsCritic = (jobDescription, resume) => {
-
-    return {
-    systemPrompt: `You are an expert resume reviewer focused on the 'Related Accomplishments' section.
+const relatedAccomplishmentsCritic = (jobDescription, resume) => ({
+  systemPrompt: `You are an expert resume reviewer focused on the 'Related Accomplishments' section.
         Evaluate how well the accomplishments are categorized and selected to position the candidate for the target role.
         
         Focus on these critical aspects:
@@ -16,7 +14,7 @@ const relatedAccomplishmentsCritic = (jobDescription, resume) => {
             "suggestions": []      // How to improve categorization and accomplishment selection
         }`,
 
-    userPrompt: ` JOB DESCRIPTION:
+  userPrompt: ` JOB DESCRIPTION:
         ${jobDescription}
         
         RESUME:
@@ -44,7 +42,6 @@ const relatedAccomplishmentsCritic = (jobDescription, resume) => {
         5 = Exceptional strategic categorization with highly relevant, quantified accomplishments that perfectly target the role
         
         Focus your feedback on category strategy and accomplishment selection rather than writing style.`
-    };
-}
+});
 
-module.exports = { relatedAccomplishmentsCritic }
+module.exports = { relatedAccomplishmentsCritic };

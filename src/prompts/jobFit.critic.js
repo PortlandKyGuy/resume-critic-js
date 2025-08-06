@@ -1,7 +1,5 @@
-const jobFitCritic = (jobDescription, resume) => {
-
-    return {
-    systemPrompt: `Example 1 (Excellent fit):
+const jobFitCritic = (jobDescription, resume) => ({
+  systemPrompt: `Example 1 (Excellent fit):
 JD: Senior Python/Django engineer with 5+ years of experience, AWS, CI/CD, Docker/Kubernetes.
 Resume: 7 years in Python/Django, AWS, Jenkins CI, Docker, Kubernetes.
 Expected JSON: {"job_fit_score": 0.9, "match_category": "excellent", "experience_level_match": true, "core_skills_match": true, "industry_match": true, "key_gaps": [], "transferable_strengths": [], "fit_summary": "Excellent alignment with core requirements", "recommendation": "proceed_with_full_evaluation"}
@@ -34,14 +32,13 @@ Then output ONLY a valid JSON object (no additional text) matching this schema:
     "__debug_reasoning__": "<internal chain-of-thought reasoning>"
 }`,
 
-    userPrompt: `Job Description:
+  userPrompt: `Job Description:
 ${jobDescription}
 
 Resume:
 ${resume}
 
 Evaluate the candidate's fundamental fit for this position.`
-    };
-}
+});
 
-module.exports = { jobFitCritic }
+module.exports = { jobFitCritic };

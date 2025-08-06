@@ -8,9 +8,8 @@ const { logger } = require('../../utils/logger');
  * @param {Object} defaults - Default options
  * @returns {Function} Complete function
  */
-const createOpenAIComplete = (client, defaults) => {
-  // Return a function that captures client and defaults in its closure
-  return async (options) => {
+const createOpenAIComplete = (client, defaults) => async options => {
+    // Return a function that captures client and defaults in its closure
     const startTime = Date.now();
 
     logger.debug('OpenAI: Starting completion request', {
@@ -47,7 +46,11 @@ const createOpenAIComplete = (client, defaults) => {
         { condition: options.responseFormat !== undefined, key: 'response_format', value: options.responseFormat },
         { condition: options.seed !== undefined, key: 'seed', value: options.seed },
         { condition: options.topP !== undefined, key: 'top_p', value: options.topP },
-        { condition: options.frequencyPenalty !== undefined, key: 'frequency_penalty', value: options.frequencyPenalty },
+        {
+          condition: options.frequencyPenalty !== undefined,
+          key: 'frequency_penalty',
+          value: options.frequencyPenalty
+        },
         { condition: options.presencePenalty !== undefined, key: 'presence_penalty', value: options.presencePenalty }
       ].filter(param => param.condition)
         .reduce((acc, param) => ({ ...acc, [param.key]: param.value }), {});
@@ -102,7 +105,6 @@ const createOpenAIComplete = (client, defaults) => {
       );
     }
   };
-};
 
 /**
  * Create OpenAI provider

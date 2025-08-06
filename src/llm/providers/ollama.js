@@ -10,14 +10,14 @@ const clientCache = new Map();
  * @param {string} baseURL - Base URL for Ollama
  * @returns {Object} Axios client instance
  */
-const getOllamaClient = (baseURL) => {
+const getOllamaClient = baseURL => {
   const url = baseURL || 'http://localhost:11434';
-  
+
   // Check if client already exists in cache
   if (clientCache.has(url)) {
     return clientCache.get(url);
   }
-  
+
   logger.debug('Ollama: Creating axios client', { baseURL: url });
 
   const client = axios.create({
@@ -27,10 +27,10 @@ const getOllamaClient = (baseURL) => {
       'Content-Type': 'application/json'
     }
   });
-  
+
   // Store in cache
   clientCache.set(url, client);
-  
+
   return client;
 };
 
@@ -40,9 +40,8 @@ const getOllamaClient = (baseURL) => {
  * @param {Object} defaults - Default options
  * @returns {Function} Complete function
  */
-const createOllamaComplete = (client, defaults) => {
-  // Return a function that captures client and defaults in its closure
-  return async (options) => {
+const createOllamaComplete = (client, defaults) => async options => {
+    // Return a function that captures client and defaults in its closure
     const startTime = Date.now();
 
     logger.debug('Ollama: Starting completion request', {
@@ -144,7 +143,6 @@ const createOllamaComplete = (client, defaults) => {
       throw new LLMProviderError(message, 'ollama', error);
     }
   };
-};
 
 /**
  * Create Ollama provider for local LLM

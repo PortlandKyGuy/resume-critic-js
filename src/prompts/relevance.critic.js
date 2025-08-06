@@ -1,7 +1,5 @@
-const relevanceCritic = (jobDescription, resume) => {
-
-    return {
-    systemPrompt: `You are a hiring manager with extensive experience in candidate evaluation.
+const relevanceCritic = (jobDescription, resume) => ({
+  systemPrompt: `You are a hiring manager with extensive experience in candidate evaluation.
         Your task is to assess how well a resume targets the specific job description.
         
         Focus on these aspects:
@@ -18,7 +16,7 @@ const relevanceCritic = (jobDescription, resume) => {
             "suggestions": [] // Specific suggestions for improving relevance
         }`,
 
-    userPrompt: ` JOB DESCRIPTION:
+  userPrompt: ` JOB DESCRIPTION:
         ${jobDescription}
         
         RESUME:
@@ -38,7 +36,6 @@ const relevanceCritic = (jobDescription, resume) => {
         3 = Some tailoring, but missing key elements
         4 = Well-tailored with minor improvements possible
         5 = Expertly tailored to the specific position`
-    };
-}
+});
 
-module.exports = { relevanceCritic }
+module.exports = { relevanceCritic };

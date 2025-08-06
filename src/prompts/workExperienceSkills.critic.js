@@ -1,16 +1,16 @@
 const workExperienceSkillsCritic = (jobDescription, resume, extra) => {
-    if (!extra || !extra.work_experience) {
-        return {
-            systemPrompt: '',
-            userPrompt: ''
-        };
-    }
-    
-    const workExperience = extra.work_experience;
-    const requiredTerms = extra.required_terms || '';
-    const experienceText = formatWorkExperience(workExperience);
-
+  if (!extra || !extra.work_experience) {
     return {
+      systemPrompt: '',
+      userPrompt: ''
+    };
+  }
+
+  const workExperience = extra.work_experience;
+  const requiredTerms = extra.required_terms || '';
+  const experienceText = formatWorkExperience(workExperience);
+
+  return {
     systemPrompt: `You are an expert in skills assessment.
 
 Analyze how well the work experience demonstrates required skills:
@@ -45,29 +45,29 @@ Work Experience:
 ${experienceText}
 
 Evaluate how well this work experience demonstrates the required skills.`
-    };
-}
+  };
+};
 
 function formatWorkExperience(experienceData) {
-    let experiences;
-    if (typeof experienceData === 'object' && experienceData.experiences) {
-        experiences = experienceData.experiences;
-    } else {
-        experiences = experienceData;
+  let experiences;
+  if (typeof experienceData === 'object' && experienceData.experiences) {
+    experiences = experienceData.experiences;
+  } else {
+    experiences = experienceData;
+  }
+
+  const textParts = [];
+  for (const exp of experiences) {
+    textParts.push(`\n${exp.title || 'Unknown Title'} - ${exp.company || 'Unknown Company'}`);
+    textParts.push(`${exp.dates || 'No dates provided'}`);
+    if (exp.responsibilities) {
+      for (const resp of exp.responsibilities) {
+        textParts.push(`  • ${resp}`);
+      }
     }
-    
-    const textParts = [];
-    for (const exp of experiences) {
-        textParts.push(`\n${exp.title || 'Unknown Title'} - ${exp.company || 'Unknown Company'}`);
-        textParts.push(`${exp.dates || 'No dates provided'}`);
-        if (exp.responsibilities) {
-            for (const resp of exp.responsibilities) {
-                textParts.push(`  • ${resp}`);
-            }
-        }
-    }
-    
-    return textParts.join('\n');
+  }
+
+  return textParts.join('\n');
 }
 
-module.exports = { workExperienceSkillsCritic }
+module.exports = { workExperienceSkillsCritic };

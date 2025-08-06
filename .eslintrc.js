@@ -20,7 +20,7 @@ module.exports = {
     'no-use-before-define': ['error', { functions: false }],
     'prefer-destructuring': ['error', { object: true, array: false }],
     'no-param-reassign': ['error', { props: false }],
-    'max-len': ['error', { code: 120, ignoreComments: true }],
+    'max-len': 'off',
     'object-curly-newline': ['error', { consistent: true }],
     'arrow-parens': ['error', 'as-needed'],
     'fp/no-mutation': ['warn', {

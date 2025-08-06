@@ -1,10 +1,10 @@
 const keywordCritic = (jobDescription, resume, requiredTerms = null) => {
-    // If specific terms are provided, use them. Otherwise, ask LLM to infer.
-    const requiredTermsGuidance = requiredTerms 
-        ? `REQUIRED TERMS (provided):\n${requiredTerms}`
-        : "REQUIRED TERMS: Please infer 'must-have' and 'nice-to-have' terms from the Job Description based on their centrality to the role.";
+  // If specific terms are provided, use them. Otherwise, ask LLM to infer.
+  const requiredTermsGuidance = requiredTerms
+    ? `REQUIRED TERMS (provided):\n${requiredTerms}`
+    : "REQUIRED TERMS: Please infer 'must-have' and 'nice-to-have' terms from the Job Description based on their centrality to the role.";
 
-    return {
+  return {
     systemPrompt: `You are an expert at checking if all required skills and terms are in a resume. 
         You have extensive experience in HR and technical recruiting.
         
@@ -34,7 +34,7 @@ const keywordCritic = (jobDescription, resume, requiredTerms = null) => {
         4. List the missing 'must-have' and 'nice-to-have' terms separately.
         5. List all important terms found.
         6. Provide actionable suggestions, prioritizing how to incorporate missing 'must-have' terms if possible.`
-    };
-}
+  };
+};
 
-module.exports = { keywordCritic }
+module.exports = { keywordCritic };

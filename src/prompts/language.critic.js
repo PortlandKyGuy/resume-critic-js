@@ -1,7 +1,5 @@
-const languageCritic = (jobDescription, resume) => {
-
-    return {
-    systemPrompt: `You are a professional copyeditor and writing coach specializing in resume writing.
+const languageCritic = (jobDescription, resume) => ({
+  systemPrompt: `You are a professional copyeditor and writing coach specializing in resume writing.
         Your task is to evaluate the language quality, style, clarity, and professionalism of a resume.
         
         Focus on these aspects:
@@ -21,7 +19,7 @@ const languageCritic = (jobDescription, resume) => {
         }
         Example: {"score":4,"errors":[],"weak_phrases":[],"suggestions":[]}`,
 
-    userPrompt: ` JOB DESCRIPTION:
+  userPrompt: ` JOB DESCRIPTION:
         ${jobDescription}
         
         RESUME:
@@ -43,7 +41,6 @@ const languageCritic = (jobDescription, resume) => {
         5 = Excellent professional language throughout
         
         Identify specific errors and weak phrasing that should be improved.`
-    };
-}
+});
 
-module.exports = { languageCritic }
+module.exports = { languageCritic };

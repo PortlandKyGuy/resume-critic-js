@@ -1,8 +1,8 @@
 const readabilityCritic = (jobDescription, resume) => {
-    // Calculate approximate word count
-    const wordCount = (resume.match(/\w+/g) || []).length;
+  // Calculate approximate word count
+  const wordCount = (resume.match(/\w+/g) || []).length;
 
-    return {
+  return {
     systemPrompt: `You are a resume readability expert who evaluates how easy resumes are to scan and comprehend.
         Your task is to analyze a resume's structural readability and complexity.
         
@@ -46,7 +46,7 @@ const readabilityCritic = (jobDescription, resume) => {
         4. Calculate the total 'word_count' and average words per bullet point ('avg_bullet_length').
         5. Identify specific 'issues' hindering readability (e.g., long paragraphs, jargon overload, inconsistent formatting, overly long sentences/bullets).
         6. Provide actionable 'suggestions' to improve readability for the target audience.`
-    };
-}
+  };
+};
 
-module.exports = { readabilityCritic }
+module.exports = { readabilityCritic };

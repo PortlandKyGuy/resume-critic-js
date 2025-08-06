@@ -35,11 +35,10 @@ const createEvaluationValidator = () => validate([
     .default(true),
 
   body('max_workders')
-  .optional()
-  .default(6)
-  .isInt({min: 1, max: 10})
-  .withMessage('Maximum number of parallel critic workers (1-10)')
-  ,
+    .optional()
+    .default(6)
+    .isInt({ min: 1, max: 10 })
+    .withMessage('Maximum number of parallel critic workers (1-10)'),
 
   body('industry')
     .optional()

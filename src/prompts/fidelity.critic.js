@@ -1,9 +1,9 @@
 const fidelityCritic = (jobDescription, resume, originalResume) => {
-    if (!originalResume) {
-        throw new Error("Original resume must be provided as third parameter for fidelity checking");
-    }
+  if (!originalResume) {
+    throw new Error('Original resume must be provided as third parameter for fidelity checking');
+  }
 
-    return {
+  return {
     systemPrompt: `You must reply with exactly one JSON object and nothing else.
 You are an integrity auditor comparing a tailored resume against its job description (with the original resume for reference).
 
@@ -54,15 +54,15 @@ ${resume}
 
 Original Resume:
 ${originalResume}`
-    };
-}
+  };
+};
 
 const fidelitySimpleCritic = (jobDescription, resume, originalResume) => {
-    if (!originalResume) {
-        throw new Error("Original resume must be provided as third parameter for fidelity checking");
-    }
+  if (!originalResume) {
+    throw new Error('Original resume must be provided as third parameter for fidelity checking');
+  }
 
-    return {
+  return {
     systemPrompt: `You must reply with exactly one JSON object and nothing else.
 You are an integrity auditor comparing a tailored resume against its original resume.
 
@@ -96,15 +96,15 @@ ${originalResume}
 
 Tailored Resume:
 ${resume}`
-    };
-}
+  };
+};
 
 const coverLetterFidelityCritic = (jobDescription, coverLetter, originalResume) => {
-    if (!originalResume) {
-        throw new Error("Original resume must be provided as third parameter for cover letter fidelity checking");
-    }
+  if (!originalResume) {
+    throw new Error('Original resume must be provided as third parameter for cover letter fidelity checking');
+  }
 
-    return {
+  return {
     systemPrompt: `You must reply with exactly one JSON object and nothing else.
 You are an integrity auditor comparing a tailored cover letter against its original resume.
 
@@ -138,7 +138,7 @@ ${originalResume}
 
 Cover Letter:
 ${coverLetter}`
-    };
-}
+  };
+};
 
-module.exports = { fidelityCritic, fidelitySimpleCritic, coverLetterFidelityCritic }
+module.exports = { fidelityCritic, fidelitySimpleCritic, coverLetterFidelityCritic };

@@ -1,33 +1,33 @@
 const summaryConcisenessCritic = (jobDescription, resume, extra) => {
-    let tailoredSummary = '';
-    let originalResume = resume;
-    
-    if (extra && typeof extra === 'object') {
-        tailoredSummary = extra.tailored_summary || '';
-        originalResume = extra.original_resume || resume;
-    }
+  let tailoredSummary = '';
+  let originalResume = resume;
 
-    let userPrompt = ` JOB DESCRIPTION:
+  if (extra && typeof extra === 'object') {
+    tailoredSummary = extra.tailored_summary || '';
+    originalResume = extra.original_resume || resume;
+  }
+
+  let userPrompt = ` JOB DESCRIPTION:
         ${jobDescription}
         
         `;
-    
-    if (tailoredSummary) {
-        userPrompt += `TAILORED SUMMARY TO EVALUATE:
+
+  if (tailoredSummary) {
+    userPrompt += `TAILORED SUMMARY TO EVALUATE:
         ${tailoredSummary}
         
         Evaluate the conciseness and clarity of this tailored summary.
         `;
-    } else {
-        userPrompt += `RESUME:
+  } else {
+    userPrompt += `RESUME:
         ${resume}
         
         Evaluate the conciseness of the resume summary (if present).
         If no summary exists, return score 0.0 and note the absence.
         `;
-    }
-    
-    userPrompt += `
+  }
+
+  userPrompt += `
         Analyze:
         - Length: Is it appropriately brief (2-4 sentences, 50-100 words ideal)?
         - Density: Does every word contribute meaningful information?
@@ -46,7 +46,7 @@ const summaryConcisenessCritic = (jobDescription, resume, extra) => {
         
         Provide specific editing suggestions to maximize impact with minimum words.`;
 
-    return {
+  return {
     systemPrompt: `You are an expert resume reviewer specializing in concise, effective professional summaries.
         
         Evaluate the summary's conciseness and clarity:
@@ -70,8 +70,8 @@ const summaryConcisenessCritic = (jobDescription, resume, extra) => {
             "suggestions": [] // Specific edits for improvement
         }`,
 
-    userPrompt: userPrompt
-    };
-}
+    userPrompt
+  };
+};
 
-module.exports = { summaryConcisenessCritic }
+module.exports = { summaryConcisenessCritic };

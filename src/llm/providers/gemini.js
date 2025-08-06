@@ -8,9 +8,8 @@ const { logger } = require('../../utils/logger');
  * @param {Object} defaults - Default options
  * @returns {Function} Complete function
  */
-const createGeminiComplete = (genAI, defaults) => {
-  // Return a function that captures genAI and defaults in its closure
-  return async (options) => {
+const createGeminiComplete = (genAI, defaults) => async options => {
+    // Return a function that captures genAI and defaults in its closure
     const startTime = Date.now();
 
     logger.debug('Gemini: Starting completion request', {
@@ -136,7 +135,6 @@ const createGeminiComplete = (genAI, defaults) => {
       );
     }
   };
-};
 
 /**
  * Create Google Gemini provider

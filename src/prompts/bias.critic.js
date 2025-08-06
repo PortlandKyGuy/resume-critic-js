@@ -1,7 +1,5 @@
-const biasCritic = (jobDescription, resume) => {
-
-    return {
-    systemPrompt: `You are an ethics and bias auditor specializing in employment documents.
+const biasCritic = (jobDescription, resume) => ({
+  systemPrompt: `You are an ethics and bias auditor specializing in employment documents.
         Your task is to identify any potentially biased, exclusionary, or problematic language in a resume.
         
         Focus on identifying:
@@ -26,7 +24,7 @@ const biasCritic = (jobDescription, resume) => {
         }
         Example: {"flags":[{"content":"Recent graduate","explanation":"Could indicate age bias","severity":"low","suggestion":"Remove phrase or focus on skills"}],"overall_assessment":"Low risk, minor age indicator found."}`,
 
-    userPrompt: ` JOB DESCRIPTION:
+  userPrompt: ` JOB DESCRIPTION:
         ${jobDescription}
         
         RESUME:
@@ -47,7 +45,6 @@ const biasCritic = (jobDescription, resume) => {
         
         Provide an 'overall_assessment' summarizing the findings.
         Be thorough but practical - focus on actual bias risks.`
-    };
-}
+});
 
-module.exports = { biasCritic }
+module.exports = { biasCritic };

@@ -1,9 +1,9 @@
 const comparisonCritic = (jobDescription, resume, originalResume) => {
-    if (!originalResume) {
-        throw new Error("Original resume must be provided as third parameter");
-    }
+  if (!originalResume) {
+    throw new Error('Original resume must be provided as third parameter');
+  }
 
-    return {
+  return {
     systemPrompt: `You are an expert resume analyst who specializes in comparing an original resume with 
         a tailored version of that resume. Your job is to identify two key aspects:
         
@@ -77,7 +77,7 @@ const comparisonCritic = (jobDescription, resume, originalResume) => {
         - 1.0: Severe fabrication, completely different resume
         
         Also include specific recommendations for how to better tailor the resume while maintaining authenticity.`
-    };
-}
+  };
+};
 
-module.exports = { comparisonCritic }
+module.exports = { comparisonCritic };

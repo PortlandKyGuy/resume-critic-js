@@ -1,33 +1,33 @@
 const summaryKeywordCritic = (jobDescription, resume, extra) => {
-    let tailoredSummary = '';
-    let originalResume = resume;
-    
-    if (extra && typeof extra === 'object') {
-        tailoredSummary = extra.tailored_summary || '';
-        originalResume = extra.original_resume || resume;
-    }
-    
-    let userPrompt = ` JOB DESCRIPTION:
+  let tailoredSummary = '';
+  let originalResume = resume;
+
+  if (extra && typeof extra === 'object') {
+    tailoredSummary = extra.tailored_summary || '';
+    originalResume = extra.original_resume || resume;
+  }
+
+  let userPrompt = ` JOB DESCRIPTION:
         ${jobDescription}
         
         `;
-    
-    if (tailoredSummary) {
-        userPrompt += `TAILORED SUMMARY TO EVALUATE:
+
+  if (tailoredSummary) {
+    userPrompt += `TAILORED SUMMARY TO EVALUATE:
         ${tailoredSummary}
         
         Evaluate keyword usage in this tailored summary.
         `;
-    } else {
-        userPrompt += `RESUME:
+  } else {
+    userPrompt += `RESUME:
         ${resume}
         
         Evaluate keyword usage in the resume summary (if present).
         If no summary exists, return score 0.0 and note critical missing keywords.
         `;
-    }
-    
-    userPrompt += `
+  }
+
+  userPrompt += `
         Identify and evaluate:
         
         1. Critical Technical Keywords:
@@ -59,7 +59,7 @@ const summaryKeywordCritic = (jobDescription, resume, extra) => {
         
         Provide suggestions for incorporating missing critical keywords naturally.`;
 
-    return {
+  return {
     systemPrompt: `You are an expert resume reviewer specializing in keyword optimization for ATS systems and recruiter scanning.
         
         Evaluate the summary's use of important keywords from the job description:
@@ -83,8 +83,8 @@ const summaryKeywordCritic = (jobDescription, resume, extra) => {
             "suggestions": [] // How to improve keyword presence naturally
         }`,
 
-    userPrompt: userPrompt
-    };
-}
+    userPrompt
+  };
+};
 
-module.exports = { summaryKeywordCritic }
+module.exports = { summaryKeywordCritic };
