@@ -1,7 +1,8 @@
 const winston = require('winston');
+const { getConfig } = require('./config');
 
 const createLogger = (options = {}) => {
-  const logLevel = options.level || process.env.LOG_LEVEL || 'info';
+  const logLevel = options.level || process.env.LOG_LEVEL || getConfig('logging.level', 'info');
   const nodeEnv = process.env.NODE_ENV || 'development';
 
   const formats = [

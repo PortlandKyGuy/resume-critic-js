@@ -1,9 +1,9 @@
 server:
-  port: 8000
+  port: 8200
 
 llm:
-  useMock: true
-  provider: mock
+  useMock: false
+  provider: openai
 
 logging:
   level: debug
