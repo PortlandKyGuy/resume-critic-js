@@ -9,102 +9,102 @@ const { logger } = require('../../utils/logger');
  * @returns {Function} Complete function
  */
 const createOpenAIComplete = (client, defaults) => async options => {
-    // Return a function that captures client and defaults in its closure
-    const startTime = Date.now();
+  // Return a function that captures client and defaults in its closure
+  const startTime = Date.now();
 
-    logger.debug('OpenAI: Starting completion request', {
-      hasSystem: !!options.system,
-      userPromptLength: options.user?.length,
+  logger.debug('OpenAI: Starting completion request', {
+    hasSystem: !!options.system,
+    userPromptLength: options.user?.length,
+    temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
+    model: options.model || defaults.model
+  });
+
+  try {
+    const messages = [];
+
+    if (options.system) {
+      messages.push({
+        role: 'system',
+        content: options.system
+      });
+    }
+
+    messages.push({
+      role: 'user',
+      content: options.user
+    });
+
+    const completionOptions = {
+      model: options.model || defaults.model,
+      messages,
       temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
+      max_tokens: options.maxTokens || defaults.maxTokens
+    };
+
+    // Only add optional parameters if they are explicitly provided
+    const optionalParams = [
+      { condition: options.responseFormat !== undefined, key: 'response_format', value: options.responseFormat },
+      { condition: options.seed !== undefined, key: 'seed', value: options.seed },
+      { condition: options.topP !== undefined, key: 'top_p', value: options.topP },
+      {
+        condition: options.frequencyPenalty !== undefined,
+        key: 'frequency_penalty',
+        value: options.frequencyPenalty
+      },
+      { condition: options.presencePenalty !== undefined, key: 'presence_penalty', value: options.presencePenalty }
+    ].filter(param => param.condition)
+      .reduce((acc, param) => ({ ...acc, [param.key]: param.value }), {});
+
+    const finalCompletionOptions = { ...completionOptions, ...optionalParams };
+
+    logger.debug('OpenAI: Sending request', {
+      model: finalCompletionOptions.model,
+      messageCount: messages.length,
+      maxTokens: finalCompletionOptions.max_tokens,
+      temperature: finalCompletionOptions.temperature,
+      hasOptionalParams: !!(options.responseFormat || options.seed || options.topP
+        || options.frequencyPenalty || options.presencePenalty)
+    });
+
+    const response = await client.chat.completions.create(finalCompletionOptions);
+
+    const duration = Date.now() - startTime;
+    const { content } = response.choices[0].message;
+
+    logger.info('OpenAI: Completion successful', {
+      duration,
+      model: response.model,
+      promptTokens: response.usage?.prompt_tokens,
+      completionTokens: response.usage?.completion_tokens,
+      totalTokens: response.usage?.total_tokens,
+      responseLength: content?.length,
+      finishReason: response.choices[0].finish_reason
+    });
+
+    logger.debug('OpenAI: Response preview', {
+      preview: content ? content.substring(0, 100) + (content.length > 100 ? '...' : '') : ''
+    });
+
+    return content;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+
+    logger.error('OpenAI: Request failed', {
+      duration,
+      errorMessage: error.message,
+      errorType: error.type,
+      errorCode: error.code,
+      statusCode: error.response?.status,
       model: options.model || defaults.model
     });
 
-    try {
-      const messages = [];
-
-      if (options.system) {
-        messages.push({
-          role: 'system',
-          content: options.system
-        });
-      }
-
-      messages.push({
-        role: 'user',
-        content: options.user
-      });
-
-      const completionOptions = {
-        model: options.model || defaults.model,
-        messages,
-        temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
-        max_tokens: options.maxTokens || defaults.maxTokens
-      };
-
-      // Only add optional parameters if they are explicitly provided
-      const optionalParams = [
-        { condition: options.responseFormat !== undefined, key: 'response_format', value: options.responseFormat },
-        { condition: options.seed !== undefined, key: 'seed', value: options.seed },
-        { condition: options.topP !== undefined, key: 'top_p', value: options.topP },
-        {
-          condition: options.frequencyPenalty !== undefined,
-          key: 'frequency_penalty',
-          value: options.frequencyPenalty
-        },
-        { condition: options.presencePenalty !== undefined, key: 'presence_penalty', value: options.presencePenalty }
-      ].filter(param => param.condition)
-        .reduce((acc, param) => ({ ...acc, [param.key]: param.value }), {});
-
-      const finalCompletionOptions = { ...completionOptions, ...optionalParams };
-
-      logger.debug('OpenAI: Sending request', {
-        model: finalCompletionOptions.model,
-        messageCount: messages.length,
-        maxTokens: finalCompletionOptions.max_tokens,
-        temperature: finalCompletionOptions.temperature,
-        hasOptionalParams: !!(options.responseFormat || options.seed || options.topP
-                             || options.frequencyPenalty || options.presencePenalty)
-      });
-
-      const response = await client.chat.completions.create(finalCompletionOptions);
-
-      const duration = Date.now() - startTime;
-      const { content } = response.choices[0].message;
-
-      logger.info('OpenAI: Completion successful', {
-        duration,
-        model: response.model,
-        promptTokens: response.usage?.prompt_tokens,
-        completionTokens: response.usage?.completion_tokens,
-        totalTokens: response.usage?.total_tokens,
-        responseLength: content?.length,
-        finishReason: response.choices[0].finish_reason
-      });
-
-      logger.debug('OpenAI: Response preview', {
-        preview: content ? content.substring(0, 100) + (content.length > 100 ? '...' : '') : ''
-      });
-
-      return content;
-    } catch (error) {
-      const duration = Date.now() - startTime;
-
-      logger.error('OpenAI: Request failed', {
-        duration,
-        errorMessage: error.message,
-        errorType: error.type,
-        errorCode: error.code,
-        statusCode: error.response?.status,
-        model: options.model || defaults.model
-      });
-
-      throw new LLMProviderError(
-        `OpenAI API error: ${error.message}`,
-        'openai',
-        error
-      );
-    }
-  };
+    throw new LLMProviderError(
+      `OpenAI API error: ${error.message}`,
+      'openai',
+      error
+    );
+  }
+};
 
 /**
  * Create OpenAI provider

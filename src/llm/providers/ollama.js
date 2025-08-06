@@ -41,108 +41,108 @@ const getOllamaClient = baseURL => {
  * @returns {Function} Complete function
  */
 const createOllamaComplete = (client, defaults) => async options => {
-    // Return a function that captures client and defaults in its closure
-    const startTime = Date.now();
+  // Return a function that captures client and defaults in its closure
+  const startTime = Date.now();
 
-    logger.debug('Ollama: Starting completion request', {
-      hasSystem: !!options.system,
-      userPromptLength: options.user?.length,
-      temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
-      model: options.model || defaults.model
+  logger.debug('Ollama: Starting completion request', {
+    hasSystem: !!options.system,
+    userPromptLength: options.user?.length,
+    temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
+    model: options.model || defaults.model
+  });
+
+  try {
+    // Build prompt with system message if provided
+    const prompt = options.system
+      ? `System: ${options.system}\n\nUser: ${options.user}`
+      : options.user;
+
+    if (options.system) {
+      logger.debug('Ollama: Combined system and user prompts', {
+        combinedLength: prompt.length
+      });
+    }
+
+    const requestData = {
+      model: options.model || defaults.model,
+      prompt,
+      stream: false,
+      options: {
+        temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
+        num_predict: options.maxTokens || defaults.maxTokens,
+        top_p: options.topP,
+        top_k: options.topK,
+        seed: options.seed,
+        repeat_penalty: options.repeatPenalty
+      }
+    };
+
+    logger.debug('Ollama: Sending request', {
+      model: requestData.model,
+      promptLength: prompt.length,
+      numPredict: requestData.options.num_predict,
+      temperature: requestData.options.temperature,
+      hasOptionalParams: !!(options.topP || options.topK || options.seed || options.repeatPenalty)
     });
 
-    try {
-      // Build prompt with system message if provided
-      const prompt = options.system
-        ? `System: ${options.system}\n\nUser: ${options.user}`
-        : options.user;
+    const response = await client.post('/api/generate', requestData);
 
-      if (options.system) {
-        logger.debug('Ollama: Combined system and user prompts', {
-          combinedLength: prompt.length
-        });
-      }
+    const duration = Date.now() - startTime;
 
-      const requestData = {
-        model: options.model || defaults.model,
-        prompt,
-        stream: false,
-        options: {
-          temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
-          num_predict: options.maxTokens || defaults.maxTokens,
-          top_p: options.topP,
-          top_k: options.topK,
-          seed: options.seed,
-          repeat_penalty: options.repeatPenalty
-        }
-      };
-
-      logger.debug('Ollama: Sending request', {
-        model: requestData.model,
-        promptLength: prompt.length,
-        numPredict: requestData.options.num_predict,
-        temperature: requestData.options.temperature,
-        hasOptionalParams: !!(options.topP || options.topK || options.seed || options.repeatPenalty)
-      });
-
-      const response = await client.post('/api/generate', requestData);
-
-      const duration = Date.now() - startTime;
-
-      if (!response.data || !response.data.response) {
-        logger.error('Ollama: Invalid response structure', {
-          duration,
-          hasData: !!response.data,
-          hasResponse: !!response.data?.response
-        });
-        throw new Error('Invalid response from Ollama');
-      }
-
-      const text = response.data.response;
-
-      logger.info('Ollama: Completion successful', {
+    if (!response.data || !response.data.response) {
+      logger.error('Ollama: Invalid response structure', {
         duration,
-        responseLength: text.length,
-        model: response.data.model,
-        evalCount: response.data.eval_count,
-        evalDuration: response.data.eval_duration,
-        promptEvalCount: response.data.prompt_eval_count,
-        promptEvalDuration: response.data.prompt_eval_duration,
-        tokensPerSecond: response.data.eval_count && response.data.eval_duration
-          ? Math.round(response.data.eval_count / (response.data.eval_duration / 1e9))
-          : undefined
+        hasData: !!response.data,
+        hasResponse: !!response.data?.response
       });
-
-      logger.debug('Ollama: Response preview', {
-        preview: text.substring(0, 100) + (text.length > 100 ? '...' : '')
-      });
-
-      return text;
-    } catch (error) {
-      const duration = Date.now() - startTime;
-      const message = error.code === 'ECONNREFUSED'
-        ? 'Ollama server is not running. Please start Ollama locally.'
-        : `Ollama API error: ${error.message}`;
-
-      if (error.code === 'ECONNREFUSED') {
-        logger.error('Ollama: Connection refused', {
-          duration,
-          baseURL: client.defaults.baseURL,
-          suggestion: 'Run "ollama serve" to start the Ollama server'
-        });
-      } else {
-        logger.error('Ollama: Request failed', {
-          duration,
-          errorMessage: error.message,
-          errorCode: error.code,
-          statusCode: error.response?.status,
-          model: options.model || defaults.model
-        });
-      }
-
-      throw new LLMProviderError(message, 'ollama', error);
+      throw new Error('Invalid response from Ollama');
     }
-  };
+
+    const text = response.data.response;
+
+    logger.info('Ollama: Completion successful', {
+      duration,
+      responseLength: text.length,
+      model: response.data.model,
+      evalCount: response.data.eval_count,
+      evalDuration: response.data.eval_duration,
+      promptEvalCount: response.data.prompt_eval_count,
+      promptEvalDuration: response.data.prompt_eval_duration,
+      tokensPerSecond: response.data.eval_count && response.data.eval_duration
+        ? Math.round(response.data.eval_count / (response.data.eval_duration / 1e9))
+        : undefined
+    });
+
+    logger.debug('Ollama: Response preview', {
+      preview: text.substring(0, 100) + (text.length > 100 ? '...' : '')
+    });
+
+    return text;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const message = error.code === 'ECONNREFUSED'
+      ? 'Ollama server is not running. Please start Ollama locally.'
+      : `Ollama API error: ${error.message}`;
+
+    if (error.code === 'ECONNREFUSED') {
+      logger.error('Ollama: Connection refused', {
+        duration,
+        baseURL: client.defaults.baseURL,
+        suggestion: 'Run "ollama serve" to start the Ollama server'
+      });
+    } else {
+      logger.error('Ollama: Request failed', {
+        duration,
+        errorMessage: error.message,
+        errorCode: error.code,
+        statusCode: error.response?.status,
+        model: options.model || defaults.model
+      });
+    }
+
+    throw new LLMProviderError(message, 'ollama', error);
+  }
+};
 
 /**
  * Create Ollama provider for local LLM
