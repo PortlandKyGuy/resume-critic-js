@@ -3,7 +3,7 @@
  * @description Impact demonstration critic prompt generator
  */
 
-const { curry, pipe, map, filter, test } = require('ramda');
+const { curry, test } = require('ramda');
 
 /**
  * Impact critic configuration
@@ -87,25 +87,25 @@ const QUANTIFICATION_PATTERNS = [
  * @returns {string} Analysis prompt
  */
 const generateImpactAnalysisPrompt = curry(context => {
-  const { jobTitle, seniorityLevel, industry } = context;
+  const { seniorityLevel, industry } = context;
 
-  let prompt = IMPACT_CRITIC.prompts.analysis;
+  const promptParts = [IMPACT_CRITIC.prompts.analysis];
 
   if (seniorityLevel === 'senior' || seniorityLevel === 'executive') {
-    prompt += '\n\nFor senior-level positions, also evaluate:';
-    prompt += '\n- Strategic impact and organizational change';
-    prompt += '\n- Revenue/cost impact at scale';
-    prompt += '\n- Team and department-level achievements';
+    promptParts.push('\n\nFor senior-level positions, also evaluate:');
+    promptParts.push('\n- Strategic impact and organizational change');
+    promptParts.push('\n- Revenue/cost impact at scale');
+    promptParts.push('\n- Team and department-level achievements');
   }
 
   if (industry) {
-    prompt += `\n\nIndustry-specific impact areas (${industry}):`;
-    prompt += '\n- Key performance indicators for the industry';
-    prompt += '\n- Relevant compliance or quality improvements';
-    prompt += '\n- Industry-specific value metrics';
+    promptParts.push(`\n\nIndustry-specific impact areas (${industry}):`);
+    promptParts.push('\n- Key performance indicators for the industry');
+    promptParts.push('\n- Relevant compliance or quality improvements');
+    promptParts.push('\n- Industry-specific value metrics');
   }
 
-  return prompt;
+  return promptParts.join('');
 });
 
 /**
@@ -114,7 +114,10 @@ const generateImpactAnalysisPrompt = curry(context => {
  * @returns {Object} Quantification analysis
  */
 const detectQuantification = curry(text => {
-  const matches = QUANTIFICATION_PATTERNS.reduce((acc, pattern) => acc + (text.match(pattern) ? 1 : 0), 0);
+  const matches = QUANTIFICATION_PATTERNS.reduce(
+    (acc, pattern) => acc + (text.match(pattern) ? 1 : 0),
+    0
+  );
 
   return {
     hasQuantification: matches > 0,

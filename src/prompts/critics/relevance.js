@@ -3,7 +3,7 @@
  * @description Role relevance critic prompt generator
  */
 
-const { curry, pipe, map, filter, intersection, length } = require('ramda');
+const { curry, map, filter, intersection, includes } = require('ramda');
 
 /**
  * Relevance critic configuration
@@ -77,32 +77,28 @@ const RELEVANCE_CRITIC = {
 const generateRelevanceAnalysisPrompt = curry(context => {
   const { jobTitle, requiredSkills = [], preferredSkills = [], industry } = context;
 
-  let prompt = RELEVANCE_CRITIC.prompts.analysis;
+  const promptParts = [RELEVANCE_CRITIC.prompts.analysis];
 
   if (jobTitle) {
-    prompt += `\n\nTarget position: ${jobTitle}`;
+    promptParts.push(`\n\nTarget position: ${jobTitle}`);
   }
 
   if (requiredSkills.length > 0) {
-    prompt += '\n\nRequired skills to match:';
-    requiredSkills.forEach(skill => {
-      prompt += `\n- ${skill}`;
-    });
+    promptParts.push('\n\nRequired skills to match:');
+    promptParts.push(...requiredSkills.map(skill => `\n- ${skill}`));
   }
 
   if (preferredSkills.length > 0) {
-    prompt += '\n\nPreferred skills (bonus points):';
-    preferredSkills.forEach(skill => {
-      prompt += `\n- ${skill}`;
-    });
+    promptParts.push('\n\nPreferred skills (bonus points):');
+    promptParts.push(...preferredSkills.map(skill => `\n- ${skill}`));
   }
 
   if (industry) {
-    prompt += `\n\nIndustry context: ${industry}`;
-    prompt += '\nConsider industry-specific experience and terminology';
+    promptParts.push(`\n\nIndustry context: ${industry}`);
+    promptParts.push('\nConsider industry-specific experience and terminology');
   }
 
-  return prompt;
+  return promptParts.join('');
 });
 
 /**
@@ -152,22 +148,28 @@ const assessSeniorityMatch = curry((targetLevel, candidateProfile) => {
   const target = levelMap[targetLevel] || levelMap.mid;
   const candidateYears = candidateProfile.totalExperience || 0;
 
-  let matchScore = 100;
-  let feedback = '';
-
   if (candidateYears < target.minYears) {
-    matchScore = Math.max(50, 100 - ((target.minYears - candidateYears) * 15));
-    feedback = 'May need more experience for this level';
-  } else if (target.maxYears && candidateYears > target.maxYears) {
-    matchScore = 85; // Overqualified is less penalized
-    feedback = 'May be overqualified for this level';
-  } else {
-    feedback = 'Experience level well-matched';
+    const yearsDiff = target.minYears - candidateYears;
+    return {
+      matchScore: Math.max(50, 100 - (yearsDiff * 15)),
+      feedback: 'May need more experience for this level',
+      candidateLevel: candidateProfile.inferredLevel,
+      targetLevel
+    };
+  }
+
+  if (target.maxYears && candidateYears > target.maxYears) {
+    return {
+      matchScore: 85, // Overqualified is less penalized
+      feedback: 'May be overqualified for this level',
+      candidateLevel: candidateProfile.inferredLevel,
+      targetLevel
+    };
   }
 
   return {
-    matchScore,
-    feedback,
+    matchScore: 100,
+    feedback: 'Experience level well-matched',
     candidateLevel: candidateProfile.inferredLevel,
     targetLevel
   };
@@ -211,7 +213,7 @@ const generateRelevanceImprovements = curry(evaluation => {
  * @param {Object} targetRole - Target role requirements
  * @returns {Array<string>} Transferable skills
  */
-const identifyTransferableSkills = curry((experience, targetRole) => {
+const identifyTransferableSkills = curry(experience => {
   const transferableCategories = {
     leadership: ['managed', 'led', 'directed', 'coordinated', 'supervised'],
     analytical: ['analyzed', 'evaluated', 'assessed', 'researched', 'investigated'],
@@ -221,12 +223,9 @@ const identifyTransferableSkills = curry((experience, targetRole) => {
   };
 
   // Simple implementation - in production, use NLP
-  const transferableSkills = [];
-  Object.entries(transferableCategories).forEach(([category, keywords]) => {
-    if (keywords.some(keyword => experience.toLowerCase().includes(keyword))) {
-      transferableSkills.push(category);
-    }
-  });
+  const transferableSkills = Object.entries(transferableCategories)
+    .filter(([, keywords]) => keywords.some(keyword => experience.toLowerCase().includes(keyword)))
+    .map(([category]) => category);
 
   return transferableSkills;
 });

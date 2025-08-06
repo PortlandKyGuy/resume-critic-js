@@ -3,7 +3,7 @@
  * @description Utility functions for prompt management and optimization
  */
 
-const { curry, pipe, map, reduce, slice, split, join, length } = require('ramda');
+const { curry, pipe, reduce, split } = require('ramda');
 const { memoize } = require('../utils/functional');
 const { logger } = require('../utils/logger');
 
@@ -98,7 +98,8 @@ const sanitizeForLLM = curry(text => {
     // Remove potential injection attempts
     t => t.replace(/\{\{.*?\}\}/g, '[TEMPLATE_REMOVED]'),
     // Remove control characters
-    t => t.replace(/[\x00-\x1F\x7F]/g, ' '),
+    // eslint-disable-next-line no-control-regex
+    t => t.replace(/[\u0000-\u001F\u007F]/g, ' '),
     // Normalize whitespace
     t => t.replace(/\s+/g, ' '),
     // Trim
@@ -203,24 +204,26 @@ const chunkContent = curry((chunkSize, content) => {
     return [content];
   }
 
-  const chunks = [];
-  let currentChunk = '';
   const sentences = split(/(?<=[.!?])\s+/, content);
-
-  sentences.forEach(sentence => {
+  const processedChunks = sentences.reduce((acc, sentence) => {
+    const { chunks: currentChunks, currentChunk } = acc;
     if ((currentChunk + sentence).length > chunkSize && currentChunk) {
-      chunks.push(currentChunk.trim());
-      currentChunk = sentence;
-    } else {
-      currentChunk += (currentChunk ? ' ' : '') + sentence;
+      return {
+        chunks: [...currentChunks, currentChunk.trim()],
+        currentChunk: sentence
+      };
     }
-  });
+    return {
+      chunks: currentChunks,
+      currentChunk: currentChunk + (currentChunk ? ' ' : '') + sentence
+    };
+  }, { chunks: [], currentChunk: '' });
 
-  if (currentChunk) {
-    chunks.push(currentChunk.trim());
+  if (processedChunks.currentChunk) {
+    return [...processedChunks.chunks, processedChunks.currentChunk.trim()];
   }
 
-  return chunks;
+  return processedChunks.chunks;
 });
 
 /**

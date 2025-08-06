@@ -3,7 +3,7 @@
  * @description Prompt version management for A/B testing and rollback support
  */
 
-const { curry, pipe, prop, merge, evolve, defaultTo } = require('ramda');
+const { curry, prop, merge, evolve } = require('ramda');
 const { memoize } = require('../utils/functional');
 const { logger } = require('../utils/logger');
 const { getConfig } = require('../utils/config');
@@ -140,10 +140,15 @@ const applyVersion = curry((versionId, basePrompt) => {
   })(basePrompt);
 
   // Apply response style modifications
-  if (versionMods.responseStyle === 'constructive') {
-    modifiedPrompt.system += '\nAlways frame feedback constructively and encouragingly.';
-  } else if (versionMods.responseStyle === 'industry-aware') {
-    modifiedPrompt.system += '\nAlign feedback with industry best practices and expectations.';
+  const responseStyleModifiers = {
+    constructive: '\nAlways frame feedback constructively and encouragingly.',
+    'industry-aware': '\nAlign feedback with industry best practices and expectations.'
+  };
+  const modifier = responseStyleModifiers[versionMods.responseStyle];
+  if (modifier) {
+    return evolve({
+      system: system => system + modifier
+    })(modifiedPrompt);
   }
 
   return modifiedPrompt;

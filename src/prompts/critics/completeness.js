@@ -3,7 +3,7 @@
  * @description Completeness check critic prompt generator
  */
 
-const { curry, pipe, map, filter, includes } = require('ramda');
+const { curry, filter } = require('ramda');
 
 /**
  * Completeness critic configuration
@@ -96,27 +96,27 @@ const ESSENTIAL_SECTIONS = {
  * @returns {string} Analysis prompt
  */
 const generateCompletenessAnalysisPrompt = curry(context => {
-  const { jobTitle, seniorityLevel, requiresCertification } = context;
+  const { seniorityLevel, requiresCertification } = context;
 
-  let prompt = COMPLETENESS_CRITIC.prompts.analysis;
+  const prompt = [COMPLETENESS_CRITIC.prompts.analysis];
 
   if (seniorityLevel === 'entry') {
-    prompt += '\n\nFor entry-level positions, also check:';
-    prompt += '\n- Academic projects or internships';
-    prompt += '\n- Relevant coursework';
-    prompt += '\n- Extracurricular activities';
+    prompt.push('\n\nFor entry-level positions, also check:');
+    prompt.push('\n- Academic projects or internships');
+    prompt.push('\n- Relevant coursework');
+    prompt.push('\n- Extracurricular activities');
   } else if (seniorityLevel === 'senior' || seniorityLevel === 'executive') {
-    prompt += '\n\nFor senior positions, also verify:';
-    prompt += '\n- Leadership experience';
-    prompt += '\n- Board positions or advisory roles';
-    prompt += '\n- Publications or speaking engagements';
+    prompt.push('\n\nFor senior positions, also verify:');
+    prompt.push('\n- Leadership experience');
+    prompt.push('\n- Board positions or advisory roles');
+    prompt.push('\n- Publications or speaking engagements');
   }
 
   if (requiresCertification) {
-    prompt += '\n\nRequired certifications section is mandatory for this role.';
+    prompt.push('\n\nRequired certifications section is mandatory for this role.');
   }
 
-  return prompt;
+  return prompt.join('');
 });
 
 /**
@@ -159,7 +159,10 @@ const checkSectionCompleteness = curry(resumeSections => {
   return {
     missingSections,
     incompleteSections,
-    completenessScore: Math.max(100 - (missingSections.length * 20) - (incompleteSections.length * 10), 0)
+    completenessScore: Math.max(
+      100 - (missingSections.length * 20) - (incompleteSections.length * 10),
+      0
+    )
   };
 });
 
@@ -189,6 +192,9 @@ const generateCompletenessImprovements = curry(evaluation => {
       case 'skills':
         improvements.push('Add a skills section highlighting relevant competencies');
         break;
+      default:
+        improvements.push(`Add missing ${section} section`);
+        break;
     }
   });
 
@@ -212,7 +218,9 @@ const validateDateCompleteness = curry(experiences => {
     allDatesPresent: missingDates.length === 0,
     missingDateCount: missingDates.length,
     hasCurrentRole,
-    dateCompletenessScore: missingDates.length === 0 ? 100 : Math.max(100 - (missingDates.length * 25), 0)
+    dateCompletenessScore: missingDates.length === 0
+      ? 100
+      : Math.max(100 - (missingDates.length * 25), 0)
   };
 });
 

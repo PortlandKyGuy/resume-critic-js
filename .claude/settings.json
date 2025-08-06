@@ -39,9 +39,9 @@
   },
   "enableAllProjectMcpServers": true,
   "hooks": {
-    "PostToolUse": [
+    "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Bash(git commit:*)",
         "hooks": [
           {
             "type": "command",

@@ -3,9 +3,8 @@
  * @description Industry-specific context loader and enrichment for resume evaluation
  */
 
-const { curry, pipe, map, prop, merge, defaultTo, evolve } = require('ramda');
+const { curry, prop, merge, defaultTo, evolve, reduce } = require('ramda');
 const { memoize } = require('../utils/functional');
-const { logger } = require('../utils/logger');
 
 /**
  * Industry definitions with evaluation criteria and context
@@ -321,28 +320,28 @@ const enrichIndustryContext = curry(options => {
   const { industry, jobTitle, customKeywords = [] } = options;
 
   // Get base industry context
-  let context = getIndustry(industry);
+  const baseContext = getIndustry(industry);
 
   // Apply role level modifiers
   const roleLevel = extractRoleLevel(jobTitle);
-  context = applyRoleLevelModifiers(roleLevel, context);
+  const contextWithRole = applyRoleLevelModifiers(roleLevel, baseContext);
 
   // Add custom keywords
-  if (customKeywords.length > 0) {
-    context = evolve({
+  const contextWithKeywords = customKeywords.length > 0
+    ? evolve({
       keywords: keywords => [...keywords, ...customKeywords]
-    })(context);
-  }
+    })(contextWithRole)
+    : contextWithRole;
 
   // Add metadata
-  context.metadata = {
-    roleLevel,
-    industryName: industry || 'general',
-    jobTitle: jobTitle || 'unspecified',
-    customizationsApplied: customKeywords.length > 0
-  };
-
-  return context;
+  return merge(contextWithKeywords, {
+    metadata: {
+      roleLevel,
+      industryName: industry || 'general',
+      jobTitle: jobTitle || 'unspecified',
+      customizationsApplied: customKeywords.length > 0
+    }
+  });
 });
 
 /**
@@ -373,7 +372,10 @@ const generateIndustryPromptAdditions = curry(industryContext => {
  * @param {Object} industryContext - Industry context
  * @returns {number} Weight value
  */
-const getCriticWeight = curry((criticName, industryContext) => prop(criticName, industryContext.evaluation_weights) || 1.0);
+const getCriticWeight = curry((criticName, industryContext) => prop(
+  criticName,
+  industryContext.evaluation_weights
+) || 1.0);
 
 /**
  * Calculate weighted score based on industry context

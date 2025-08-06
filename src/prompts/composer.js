@@ -3,17 +3,15 @@
  * @description Functional prompt composition engine for combining base prompts with critic-specific instructions
  */
 
-const { curry, pipe, compose, map, reduce, prop, merge, pick, evolve, always, identity, complement, isEmpty } = require('ramda');
-const { pipeAsync, memoize, tryCatch } = require('../utils/functional');
-const { render, createRenderer, registerPartial } = require('./template');
+const { curry, pipe, map, prop, merge, pick, evolve, always, identity } = require('ramda');
+const { memoize, tryCatch } = require('../utils/functional');
+const { createRenderer } = require('./template');
 const {
   SYSTEM_PROMPT,
   BATCH_EVALUATION_TEMPLATE,
   OUTPUT_SCHEMA,
   buildEvaluationContext,
-  getIndustryContext,
-  getCritics,
-  PROMPT_FRAGMENTS
+  getIndustryContext
 } = require('./base');
 
 /**
@@ -111,15 +109,8 @@ const buildDebugMetadata = curry((options, context) => ({
   enabledCritics: map(prop('name'), context.critics),
   industryContext: pick(['industry', 'industryKeywords', 'industryFocus'], context),
   customizationsApplied: !!options.customizations,
-  tokenEstimate: estimateTokenCount(JSON.stringify(context))
+  tokenEstimate: Math.ceil(JSON.stringify(context).length / 4)
 }));
-
-/**
- * Estimate token count for prompt (rough approximation)
- * @param {string} text - Text to estimate
- * @returns {number} Estimated token count
- */
-const estimateTokenCount = text => Math.ceil(text.length / 4);
 
 /**
  * Compose system prompt with enhancements
@@ -132,11 +123,14 @@ const composeSystemPrompt = curry(options => {
 
   // Add industry-specific expertise if provided
   const industryAddendum = options.industry && options.industry !== 'general'
-    ? `\n\nFor ${options.industry} roles, you pay special attention to: ${industryContext.focus}` : '';
+    ? `\n\nFor ${options.industry} roles, you pay special attention to: ${industryContext.focus}`
+    : '';
 
   // Add debug instructions if enabled
   const debugAddendum = options.debug
-    ? '\n\nDEBUG MODE: Include additional detail in your reasoning and be explicit about your scoring calculations.' : '';
+    ? '\n\nDEBUG MODE: Include additional detail in your reasoning and be explicit about your '
+      + 'scoring calculations.'
+    : '';
 
   return baseSystem + industryAddendum + debugAddendum;
 });
@@ -155,35 +149,40 @@ const composeUserPrompt = curry(context => templateRenderer(BATCH_EVALUATION_TEM
  */
 const buildOutputSchema = curry(options => {
   const baseSchema = { ...OUTPUT_SCHEMA };
-
-  // Add debug fields if enabled
-  if (options.debug) {
-    baseSchema.properties.debug = {
-      type: 'object',
-      properties: {
-        scoringRationale: { type: 'object' },
-        confidenceScores: { type: 'object' },
-        processingNotes: { type: 'array', items: { type: 'string' } }
-      }
-    };
-  }
+  // Build modified schema functionally
+  const withDebug = options.debug
+    ? merge(baseSchema, {
+      properties: merge(baseSchema.properties, {
+        debug: {
+          type: 'object',
+          properties: {
+            scoringRationale: { type: 'object' },
+            confidenceScores: { type: 'object' },
+            processingNotes: { type: 'array', items: { type: 'string' } }
+          }
+        }
+      })
+    })
+    : baseSchema;
 
   // Filter critics in schema enum
   if (options.enabledCritics) {
-    baseSchema.properties.evaluations.items.properties.critic.enum = options.enabledCritics;
+    return evolve({
+      properties: evolve({
+        evaluations: evolve({
+          items: evolve({
+            properties: evolve({
+              critic: merge(prop('critic', withDebug.properties.evaluations.items.properties), {
+                enum: options.enabledCritics
+              })
+            })
+          })
+        })
+      })
+    })(withDebug);
   }
 
-  return baseSchema;
-});
-
-/**
- * Create a reusable prompt composer with partial options
- * @param {Object} defaultOptions - Default options for the composer
- * @returns {Function} Composer function
- */
-const createComposer = curry(defaultOptions => specificOptions => {
-  const mergedOptions = merge(defaultOptions, specificOptions);
-  return composePrompt(mergedOptions);
+  return withDebug;
 });
 
 /**
@@ -218,12 +217,31 @@ const composePrompt = curry(options => {
 });
 
 /**
+ * Create a reusable prompt composer with partial options
+ * @param {Object} defaultOptions - Default options for the composer
+ * @returns {Function} Composer function
+ */
+const createComposer = curry(defaultOptions => specificOptions => {
+  const mergedOptions = merge(defaultOptions, specificOptions);
+  return composePrompt(mergedOptions);
+});
+
+/**
+ * Estimate token count for prompt (rough approximation)
+ * @param {string} text - Text to estimate
+ * @returns {number} Estimated token count
+ */
+const estimateTokenCount = text => Math.ceil(text.length / 4);
+
+/**
  * Compose prompt for specific critic subset
  * @param {Array<string>} critics - Critic names
  * @param {Object} baseOptions - Base composition options
  * @returns {ComposedPrompt} Composed prompt
  */
-const composeForCritics = curry((critics, baseOptions) => composePrompt(merge(baseOptions, { enabledCritics: critics })));
+const composeForCritics = curry((critics, baseOptions) => composePrompt(
+  merge(baseOptions, { enabledCritics: critics })
+));
 
 /**
  * Compose prompt for specific industry

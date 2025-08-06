@@ -3,7 +3,7 @@
  * @description JSON schema generator for structured LLM outputs with validation support
  */
 
-const { curry, pipe, map, reduce, merge, prop, pick, evolve } = require('ramda');
+const { curry, merge } = require('ramda');
 const { logger } = require('../utils/logger');
 
 /**
@@ -56,13 +56,13 @@ const BASE_EVALUATION_SCHEMA = {
       type: 'number',
       minimum: 0,
       maximum: 100,
-      description: 'Weighted average of all critic scores'
+      description: 'Overall evaluation score (weighted average of individual scores)'
     },
     summary: {
       type: 'string',
       minLength: 100,
       maxLength: 1000,
-      description: 'Overall evaluation summary'
+      description: 'Overall assessment summary'
     },
     top_strengths: {
       type: 'array',
@@ -71,9 +71,9 @@ const BASE_EVALUATION_SCHEMA = {
       items: {
         type: 'string',
         minLength: 10,
-        maxLength: 150
+        maxLength: 200
       },
-      description: 'Key strengths identified in the resume'
+      description: 'Key strengths of the resume'
     },
     critical_improvements: {
       type: 'array',
@@ -82,7 +82,7 @@ const BASE_EVALUATION_SCHEMA = {
       items: {
         type: 'string',
         minLength: 10,
-        maxLength: 150
+        maxLength: 200
       },
       description: 'Most important areas for improvement'
     }
@@ -90,50 +90,43 @@ const BASE_EVALUATION_SCHEMA = {
 };
 
 /**
- * Schema variations for different evaluation modes
+ * Schema variations for different evaluation contexts
  * @type {Object}
  */
 const SCHEMA_VARIATIONS = {
   minimal: {
+    description: 'Minimal schema with only essential fields',
     required: ['evaluations', 'overall_score'],
     removeProperties: ['top_strengths', 'critical_improvements']
   },
-  detailed: {
+  extended: {
+    description: 'Extended schema with additional analysis fields',
     additionalProperties: {
-      confidence_scores: {
-        type: 'object',
-        patternProperties: {
-          '^.*$': {
-            type: 'number',
-            minimum: 0,
-            maximum: 1
-          }
-        }
-      },
-      processing_time: {
+      industry_fit: {
         type: 'number',
-        description: 'Time taken to process in milliseconds'
+        minimum: 0,
+        maximum: 100,
+        description: 'Industry-specific alignment score'
+      },
+      ats_score: {
+        type: 'number',
+        minimum: 0,
+        maximum: 100,
+        description: 'ATS compatibility score'
       }
     }
   },
+
   debug: {
+    description: 'Debug schema with metadata fields',
     additionalProperties: {
       debug: {
         type: 'object',
         properties: {
-          scoring_rationale: {
-            type: 'object',
-            description: 'Detailed reasoning for each score'
-          },
-          confidence_scores: {
-            type: 'object',
-            description: 'Confidence level for each evaluation'
-          },
-          processing_notes: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Notes about the evaluation process'
-          }
+          version: { type: 'string' },
+          timestamp: { type: 'string' },
+          processing_time: { type: 'number' },
+          critic_weights: { type: 'object' }
         }
       }
     }
@@ -141,21 +134,39 @@ const SCHEMA_VARIATIONS = {
 };
 
 /**
- * Create schema for specific critics
+ * Generate schema for specific critics
  * @param {Array<string>} critics - List of critic names
  * @param {Object} baseSchema - Base schema to modify
  * @returns {Object} Modified schema
  */
-const createSchemaForCritics = curry((critics, baseSchema) => {
-  const modifiedSchema = { ...baseSchema };
-  
+const generateCriticSchema = curry((critics, baseSchema) => {
+  if (!critics || critics.length === 0) {
+    return baseSchema;
+  }
+
+  // Create a deep copy and modify the enum
+  const modifiedSchema = merge({}, baseSchema);
+
   // Update the enum for critic names
   if (critics && critics.length > 0) {
-    modifiedSchema.properties.evaluations.items.properties.critic.enum = critics;
-    modifiedSchema.properties.evaluations.minItems = critics.length;
-    modifiedSchema.properties.evaluations.maxItems = critics.length;
+    const evaluationItems = merge({}, modifiedSchema.properties.evaluations.items);
+    const criticProperty = merge({}, evaluationItems.properties.critic);
+    const updatedCriticProperty = merge(criticProperty, { enum: critics });
+    return merge(modifiedSchema, {
+      properties: merge(modifiedSchema.properties, {
+        evaluations: merge(modifiedSchema.properties.evaluations, {
+          minItems: critics.length,
+          maxItems: critics.length,
+          items: merge(evaluationItems, {
+            properties: merge(evaluationItems.properties, {
+              critic: updatedCriticProperty
+            })
+          })
+        })
+      })
+    });
   }
-  
+
   return modifiedSchema;
 });
 
@@ -167,35 +178,36 @@ const createSchemaForCritics = curry((critics, baseSchema) => {
  */
 const applySchemaVariation = curry((variation, baseSchema) => {
   const variationConfig = SCHEMA_VARIATIONS[variation];
-  
+
   if (!variationConfig) {
     logger.warn(`Unknown schema variation: ${variation}`);
     return baseSchema;
   }
-  
-  let modifiedSchema = { ...baseSchema };
-  
-  // Handle required fields modification
-  if (variationConfig.required) {
-    modifiedSchema.required = variationConfig.required;
-  }
-  
-  // Handle property removal
-  if (variationConfig.removeProperties) {
-    variationConfig.removeProperties.forEach(prop => {
-      delete modifiedSchema.properties[prop];
-    });
-  }
-  
+
+  const schemaWithRequired = variationConfig.required
+    ? merge(baseSchema, { required: variationConfig.required })
+    : baseSchema;
+
+  // Handle property removal functionally
+  const schemaWithRemovals = variationConfig.removeProperties
+    ? merge(schemaWithRequired, {
+      properties: Object.keys(schemaWithRequired.properties)
+        .filter(key => !variationConfig.removeProperties.includes(key))
+        .reduce((acc, key) => merge(acc, { [key]: schemaWithRequired.properties[key] }), {})
+    })
+    : schemaWithRequired;
+
   // Handle additional properties
-  if (variationConfig.additionalProperties) {
-    modifiedSchema.properties = merge(
-      modifiedSchema.properties,
-      variationConfig.additionalProperties
-    );
-  }
-  
-  return modifiedSchema;
+  const finalSchema = variationConfig.additionalProperties
+    ? merge(schemaWithRemovals, {
+      properties: merge(
+        schemaWithRemovals.properties,
+        variationConfig.additionalProperties
+      )
+    })
+    : schemaWithRemovals;
+
+  return finalSchema;
 });
 
 /**
@@ -203,88 +215,85 @@ const applySchemaVariation = curry((variation, baseSchema) => {
  * @param {Object} schema - JSON schema
  * @returns {string} Parsing instructions
  */
-const generateParsingInstructions = curry((schema) => {
+const generateParsingInstructions = curry(schema => {
   const instructions = [
     'Your response must be valid JSON that can be parsed by JSON.parse().',
     'Do not include any text before or after the JSON object.',
     'Ensure all required fields are present.',
     ''
   ];
-  
+
   // Add field-specific instructions
   if (schema.properties.evaluations) {
     instructions.push(`Include exactly ${schema.properties.evaluations.minItems || 'all'} evaluations.`);
   }
-  
+
   if (schema.properties.overall_score) {
     instructions.push('Calculate overall_score as a weighted average of individual scores.');
   }
-  
+
   if (schema.properties.improvements) {
     instructions.push('Provide specific, actionable improvements for each evaluation.');
   }
-  
+
   return instructions.join('\n');
 });
 
 /**
  * Validate response against schema
- * @param {Object} response - LLM response
- * @param {Object} schema - Expected schema
+ * @param {Object} schema - JSON schema
+ * @param {Object} response - Response to validate
  * @returns {Object} Validation result
  */
 const validateResponse = curry((schema, response) => {
   const errors = [];
-  
-  // Check required fields
-  if (schema.required) {
-    schema.required.forEach(field => {
-      if (!(field in response)) {
-        errors.push(`Missing required field: ${field}`);
-      }
-    });
-  }
-  
-  // Check evaluations array
-  if (response.evaluations) {
+
+  // Check top-level required fields
+  schema.required.forEach(field => {
+    if (!(field in response)) {
+      errors.push(`Missing required field: ${field}`);
+    }
+  });
+
+  // Validate evaluations array
+  if (response.evaluations !== undefined) {
     if (!Array.isArray(response.evaluations)) {
       errors.push('evaluations must be an array');
     } else {
       // Check min/max items
-      const minItems = schema.properties.evaluations.minItems;
-      const maxItems = schema.properties.evaluations.maxItems;
-      
+      const { minItems, maxItems } = schema.properties.evaluations;
+
       if (minItems && response.evaluations.length < minItems) {
         errors.push(`evaluations must have at least ${minItems} items`);
       }
-      
+
       if (maxItems && response.evaluations.length > maxItems) {
         errors.push(`evaluations must have at most ${maxItems} items`);
       }
-      
+
       // Validate each evaluation
-      response.evaluations.forEach((eval, index) => {
+      response.evaluations.forEach((evaluation, index) => {
         const itemSchema = schema.properties.evaluations.items;
-        
+
         // Check required fields
         itemSchema.required.forEach(field => {
-          if (!(field in eval)) {
+          if (!(field in evaluation)) {
             errors.push(`Evaluation ${index}: missing required field '${field}'`);
           }
         });
-        
+
         // Check score range
-        if (typeof eval.score === 'number') {
-          if (eval.score < 0 || eval.score > 100) {
+        if (typeof evaluation.score === 'number') {
+          if (evaluation.score < 0 || evaluation.score > 100) {
             errors.push(`Evaluation ${index}: score must be between 0 and 100`);
           }
-        } else if (eval.score !== undefined) {
+        } else if (evaluation.score !== undefined) {
           errors.push(`Evaluation ${index}: score must be a number`);
         }
       });
     }
   }
-  
+
   // Check overall_score
   if (response.overall_score !== undefined) {
     if (typeof response.overall_score !== 'number') {
@@ -293,7 +302,7 @@ const validateResponse = curry((schema, response) => {
       errors.push('overall_score must be between 0 and 100');
     }
   }
-  
+
   return {
     valid: errors.length === 0,
     errors
@@ -310,118 +319,124 @@ const createExampleResponse = curry((critics, schema) => {
   const evaluations = (critics || ['keyword']).map(critic => ({
     critic,
     score: 75,
-    feedback: 'This is detailed feedback about the ' + critic + ' aspect of the resume. It provides specific observations and analysis.',
+    feedback: `This is detailed feedback about the ${critic} aspect of the resume. `
+      + 'It provides specific observations and analysis.',
     improvements: [
-      'First specific improvement suggestion for ' + critic,
+      `First specific improvement suggestion for ${critic}`,
       'Second actionable recommendation to enhance this aspect'
     ]
   }));
-  
+
   const example = {
     evaluations,
     overall_score: 75,
-    summary: 'This resume demonstrates strong qualifications with room for improvement. The candidate shows relevant experience and skills but could enhance their presentation by implementing the suggested improvements.'
+    summary: 'This resume demonstrates strong qualifications with room for improvement. '
+      + 'The candidate shows relevant experience and skills but could enhance their '
+      + 'presentation by implementing the suggested improvements.'
   };
-  
+
   // Add optional fields if in schema
-  if (schema.properties.top_strengths) {
-    example.top_strengths = [
-      'Strong technical background in relevant technologies',
-      'Clear demonstration of career progression'
-    ];
-  }
-  
-  if (schema.properties.critical_improvements) {
-    example.critical_improvements = [
-      'Add quantifiable achievements to experience descriptions',
-      'Optimize keyword usage for ATS compatibility'
-    ];
-  }
-  
-  return example;
+  const exampleWithOptionals = schema.properties.top_strengths
+    ? merge(example, {
+      top_strengths: [
+        'Strong technical background in relevant technologies',
+        'Clear demonstration of career progression'
+      ]
+    })
+    : example;
+
+  return schema.properties.critical_improvements
+    ? merge(exampleWithOptionals, {
+      critical_improvements: [
+        'Add more quantifiable achievements to experience section',
+        'Optimize keywords for ATS compatibility'
+      ]
+    })
+    : exampleWithOptionals;
 });
 
 /**
- * Generate schema with all options
- * @param {Object} options - Schema generation options
- * @returns {Object} Generated schema
+ * Create schema with custom constraints
+ * @param {Object} constraints - Custom constraints
+ * @returns {Object} Modified schema
  */
-const generateSchema = curry((options = {}) => {
-  const { critics, variation, includeExample, strict } = options;
-  
-  // Start with base schema
-  let schema = { ...BASE_EVALUATION_SCHEMA };
-  
-  // Apply critics if specified
-  if (critics) {
-    schema = createSchemaForCritics(critics, schema);
-  }
-  
-  // Apply variation if specified
-  if (variation) {
-    schema = applySchemaVariation(variation, schema);
-  }
-  
-  // Add strict mode constraints
-  if (strict) {
-    schema.additionalProperties = false;
-    schema.properties.evaluations.items.additionalProperties = false;
-  }
-  
-  // Include example if requested
-  if (includeExample) {
-    schema.examples = [createExampleResponse(critics, schema)];
-  }
-  
-  return schema;
-});
+const createConstrainedSchema = curry(constraints => {
+  const baseSchema = { ...BASE_EVALUATION_SCHEMA };
 
-/**
- * Convert schema to TypeScript interface (for documentation)
- * @param {Object} schema - JSON schema
- * @returns {string} TypeScript interface definition
- */
-const schemaToTypeScript = curry((schema) => {
-  const lines = ['interface EvaluationResponse {'];
-  
-  Object.entries(schema.properties).forEach(([key, prop]) => {
-    const required = schema.required && schema.required.includes(key);
-    const optional = required ? '' : '?';
-    
-    let type = 'any';
-    if (prop.type === 'string') type = 'string';
-    else if (prop.type === 'number') type = 'number';
-    else if (prop.type === 'array') {
-      if (prop.items && prop.items.type === 'string') {
-        type = 'string[]';
-      } else {
-        type = 'any[]';
-      }
-    } else if (prop.type === 'object') {
-      type = 'Record<string, any>';
-    }
-    
-    lines.push(`  ${key}${optional}: ${type};`);
+  const constrainedSchema = merge(baseSchema, {
+    properties: merge(baseSchema.properties, {
+      feedback: merge(baseSchema.properties.feedback || {}, {
+        minLength: constraints.minFeedbackLength || 50,
+        maxLength: constraints.maxFeedbackLength || 500
+      }),
+      summary: merge(baseSchema.properties.summary || {}, {
+        minLength: constraints.minSummaryLength || 100,
+        maxLength: constraints.maxSummaryLength || 1000
+      }),
+      evaluations: merge(baseSchema.properties.evaluations || {}, {
+        minItems: constraints.minEvaluations || 1,
+        maxItems: constraints.maxEvaluations || 10
+      })
+    })
   });
-  
-  lines.push('}');
-  
-  return lines.join('\n');
+
+  return constrainedSchema;
+});
+
+/**
+ * Get schema for specific provider
+ * @param {string} provider - LLM provider name
+ * @param {Object} baseSchema - Base schema
+ * @returns {Object} Provider-specific schema
+ */
+const getProviderSchema = curry((provider, baseSchema) => {
+  const providerModifications = {
+    openai: {
+      // OpenAI works well with standard JSON schema
+    },
+    gemini: {
+      // Gemini may need simplified schemas
+      removeComplexValidation: true
+    },
+    ollama: {
+      // Ollama benefits from examples
+      includeExamples: true
+    }
+  };
+
+  const mods = providerModifications[provider] || {};
+
+  if (mods.removeComplexValidation) {
+    // Remove complex validation rules for better compatibility
+    const simplified = merge({}, baseSchema);
+    // Remove minLength/maxLength constraints
+    const cleanedProperties = Object.keys(simplified.properties).reduce((acc, key) => {
+      const prop = simplified.properties[key];
+      if (prop.type === 'string') {
+        const { minLength, maxLength, ...rest } = prop;
+        return merge(acc, { [key]: rest });
+      }
+      return merge(acc, { [key]: prop });
+    }, {});
+    return merge(simplified, { properties: cleanedProperties });
+  }
+
+  return baseSchema;
 });
 
 module.exports = {
-  // Core schemas
+  // Base schemas
   BASE_EVALUATION_SCHEMA,
   SCHEMA_VARIATIONS,
-  
-  // Schema generation
-  generateSchema,
-  createSchemaForCritics,
+
+  // Schema generators
+  generateCriticSchema,
   applySchemaVariation,
-  
+  createConstrainedSchema,
+  getProviderSchema,
+
   // Utilities
   generateParsingInstructions,
   validateResponse,
-  createExampleResponse,
-  schemaToTypeScript
+  createExampleResponse
 };

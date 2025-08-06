@@ -3,7 +3,7 @@
  * @description Readability and format critic prompt generator
  */
 
-const { curry, pipe, map, length, split } = require('ramda');
+const { curry, split } = require('ramda');
 
 /**
  * Readability critic configuration
@@ -76,18 +76,19 @@ const READABILITY_CRITIC = {
  * @returns {string} Analysis prompt
  */
 const generateReadabilityAnalysisPrompt = curry(context => {
-  const { resumeLength, targetLength = '1-2 pages' } = context;
+  const { targetLength = '1-2 pages' } = context;
 
-  let prompt = READABILITY_CRITIC.prompts.analysis;
+  const promptParts = [
+    READABILITY_CRITIC.prompts.analysis,
+    '\n\nSpecific areas to check:',
+    '\n- Section headers clarity and consistency',
+    '\n- Bullet point structure and parallelism',
+    '\n- Date formatting consistency',
+    '\n- Appropriate use of bold/italic text',
+    `\n- Length appropriateness (target: ${targetLength})`
+  ];
 
-  prompt += '\n\nSpecific areas to check:';
-  prompt += '\n- Section headers clarity and consistency';
-  prompt += '\n- Bullet point structure and parallelism';
-  prompt += '\n- Date formatting consistency';
-  prompt += '\n- Appropriate use of bold/italic text';
-  prompt += `\n- Length appropriateness (target: ${targetLength})`;
-
-  return prompt;
+  return promptParts.join('');
 });
 
 /**
@@ -98,13 +99,19 @@ const generateReadabilityAnalysisPrompt = curry(context => {
 const analyzeReadabilityMetrics = curry(text => {
   const sentences = split(/[.!?]+/, text).filter(s => s.trim().length > 0);
   const words = split(/\s+/, text).filter(w => w.length > 0);
-  const avgWordsPerSentence = sentences.length > 0 ? words.length / sentences.length : 0;
+  const avgWordsPerSentence = sentences.length > 0
+    ? words.length / sentences.length
+    : 0;
 
   return {
     wordCount: words.length,
     sentenceCount: sentences.length,
     avgWordsPerSentence: Math.round(avgWordsPerSentence),
-    readabilityScore: avgWordsPerSentence < 20 ? 90 : avgWordsPerSentence < 30 ? 70 : 50
+    readabilityScore: (() => {
+      if (avgWordsPerSentence < 20) return 90;
+      if (avgWordsPerSentence < 30) return 70;
+      return 50;
+    })()
   };
 });
 
@@ -175,15 +182,20 @@ const generateReadabilityImprovements = curry(evaluation => {
  * @returns {number} Visual hierarchy score
  */
 const assessVisualHierarchy = curry(formatting => {
-  let score = 100;
+  const penalties = [
+    { condition: !formatting.hasHeaders, penalty: 20 },
+    { condition: !formatting.hasBullets, penalty: 20 },
+    { condition: !formatting.hasConsistentSpacing, penalty: 15 },
+    { condition: !formatting.hasBoldText, penalty: 10 },
+    { condition: formatting.tooManyFonts, penalty: 15 }
+  ];
 
-  if (!formatting.hasHeaders) score -= 20;
-  if (!formatting.hasBullets) score -= 20;
-  if (!formatting.hasConsistentSpacing) score -= 15;
-  if (!formatting.hasBoldText) score -= 10;
-  if (formatting.tooManyFonts) score -= 15;
+  const totalPenalty = penalties.reduce(
+    (sum, { condition, penalty }) => sum + (condition ? penalty : 0),
+    0
+  );
 
-  return Math.max(score, 0);
+  return Math.max(100 - totalPenalty, 0);
 });
 
 module.exports = {

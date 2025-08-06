@@ -3,7 +3,7 @@
  * @description Requirements match critic prompt generator
  */
 
-const { curry, pipe, map, filter, reduce, prop } = require('ramda');
+const { curry, filter, reduce } = require('ramda');
 
 /**
  * Requirements critic configuration
@@ -85,101 +85,33 @@ const REQUIREMENT_WEIGHTS = {
  */
 const generateRequirementsAnalysisPrompt = curry(context => {
   const {
-    jobRequirements = {},
     mustHaveSkills = [],
     preferredQualifications = [],
     educationRequired,
     yearsRequired
   } = context;
 
-  let prompt = REQUIREMENTS_CRITIC.prompts.analysis;
+  const promptParts = [REQUIREMENTS_CRITIC.prompts.analysis];
 
   if (mustHaveSkills.length > 0) {
-    prompt += '\n\nMust-have skills:';
-    mustHaveSkills.forEach(skill => {
-      prompt += `\n- ${skill} [REQUIRED]`;
-    });
+    promptParts.push('\n\nMust-have skills:');
+    promptParts.push(...mustHaveSkills.map(skill => `\n- ${skill} [REQUIRED]`));
   }
 
   if (preferredQualifications.length > 0) {
-    prompt += '\n\nPreferred qualifications:';
-    preferredQualifications.forEach(qual => {
-      prompt += `\n- ${qual} [PREFERRED]`;
-    });
+    promptParts.push('\n\nPreferred qualifications:');
+    promptParts.push(...preferredQualifications.map(qual => `\n- ${qual} [PREFERRED]`));
   }
 
   if (educationRequired) {
-    prompt += `\n\nEducation requirement: ${educationRequired}`;
+    promptParts.push(`\n\nEducation requirement: ${educationRequired}`);
   }
 
   if (yearsRequired) {
-    prompt += `\n\nMinimum experience: ${yearsRequired} years`;
+    promptParts.push(`\n\nMinimum experience: ${yearsRequired} years`);
   }
 
-  return prompt;
-});
-
-/**
- * Match requirements checklist
- * @param {Object} requirements - Job requirements
- * @param {Object} candidateProfile - Candidate profile
- * @returns {Object} Requirements match analysis
- */
-const matchRequirementsChecklist = curry((requirements, candidateProfile) => {
-  const results = {
-    met: [],
-    notMet: [],
-    partial: [],
-    score: 0
-  };
-
-  // Check each requirement category
-  Object.entries(requirements).forEach(([category, items]) => {
-    items.forEach(item => {
-      const requirement = typeof item === 'string' ? { name: item, type: 'required' } : item;
-      const isMet = checkRequirement(requirement, candidateProfile);
-
-      if (isMet === 'full') {
-        results.met.push(requirement);
-      } else if (isMet === 'partial') {
-        results.partial.push(requirement);
-      } else {
-        results.notMet.push(requirement);
-      }
-    });
-  });
-
-  // Calculate score
-  const totalWeight = calculateTotalWeight(requirements);
-  const achievedWeight = calculateAchievedWeight(results);
-  results.score = Math.round((achievedWeight / totalWeight) * 100);
-
-  return results;
-});
-
-/**
- * Check individual requirement
- * @param {Object} requirement - Single requirement
- * @param {Object} candidateProfile - Candidate profile
- * @returns {string} Match status
- */
-const checkRequirement = curry((requirement, candidateProfile) => {
-  // Simplified check - in production, use more sophisticated matching
-  const { name, type } = requirement;
-  const profileText = JSON.stringify(candidateProfile).toLowerCase();
-  const requirementText = name.toLowerCase();
-
-  if (profileText.includes(requirementText)) {
-    return 'full';
-  }
-
-  // Check for related terms
-  const related = getRelatedTerms(requirementText);
-  if (related.some(term => profileText.includes(term))) {
-    return 'partial';
-  }
-
-  return 'none';
+  return promptParts.join('');
 });
 
 /**
@@ -199,14 +131,47 @@ const getRelatedTerms = requirement => {
 };
 
 /**
+ * Check individual requirement
+ * @param {Object} requirement - Single requirement
+ * @param {Object} candidateProfile - Candidate profile
+ * @returns {string} Match status
+ */
+const checkRequirement = curry((requirement, candidateProfile) => {
+  // Simplified check - in production, use more sophisticated matching
+  const { name } = requirement;
+  const profileText = JSON.stringify(candidateProfile).toLowerCase();
+  const requirementText = name.toLowerCase();
+
+  if (profileText.includes(requirementText)) {
+    return 'full';
+  }
+
+  // Check for related terms
+  const related = getRelatedTerms(requirementText);
+  if (related.some(term => profileText.includes(term))) {
+    return 'partial';
+  }
+
+  return 'none';
+});
+
+/**
  * Calculate total requirement weight
  * @param {Object} requirements - All requirements
  * @returns {number} Total weight
  */
-const calculateTotalWeight = requirements => reduce((total, category) => total + reduce((catTotal, item) => {
-  const weight = REQUIREMENT_WEIGHTS[item.type || 'required'] || 1.0;
-  return catTotal + weight;
-}, 0, category), 0, Object.values(requirements));
+const calculateTotalWeight = requirements => reduce(
+  (total, category) => total + reduce(
+    (catTotal, item) => {
+      const weight = REQUIREMENT_WEIGHTS[item.type || 'required'] || 1.0;
+      return catTotal + weight;
+    },
+    0,
+    category
+  ),
+  0,
+  Object.values(requirements)
+);
 
 /**
  * Calculate achieved weight
@@ -214,12 +179,61 @@ const calculateTotalWeight = requirements => reduce((total, category) => total +
  * @returns {number} Achieved weight
  */
 const calculateAchievedWeight = results => {
-  const fullWeight = reduce((total, req) => total + (REQUIREMENT_WEIGHTS[req.type] || 1.0), 0, results.met);
+  const fullWeight = reduce(
+    (total, req) => total + (REQUIREMENT_WEIGHTS[req.type] || 1.0),
+    0,
+    results.met
+  );
 
-  const partialWeight = reduce((total, req) => total + ((REQUIREMENT_WEIGHTS[req.type] || 1.0) * 0.5), 0, results.partial);
+  const partialWeight = reduce(
+    (total, req) => total + ((REQUIREMENT_WEIGHTS[req.type] || 1.0) * 0.5),
+    0,
+    results.partial
+  );
 
   return fullWeight + partialWeight;
 };
+
+/**
+ * Match requirements checklist
+ * @param {Object} requirements - Job requirements
+ * @param {Object} candidateProfile - Candidate profile
+ * @returns {Object} Requirements match analysis
+ */
+const matchRequirementsChecklist = curry((requirements, candidateProfile) => {
+  const results = {
+    met: [],
+    notMet: [],
+    partial: [],
+    score: 0
+  };
+
+  // Check each requirement category
+  Object.entries(requirements).forEach(([, items]) => {
+    items.forEach(item => {
+      const requirement = typeof item === 'string'
+        ? { name: item, type: 'required' }
+        : item;
+      const isMet = checkRequirement(requirement, candidateProfile);
+
+      if (isMet === 'full') {
+        results.met.push(requirement);
+      } else if (isMet === 'partial') {
+        results.partial.push(requirement);
+      } else {
+        results.notMet.push(requirement);
+      }
+    });
+  });
+
+  // Calculate score
+  const totalWeight = calculateTotalWeight(requirements);
+  const achievedWeight = calculateAchievedWeight(results);
+  return {
+    ...results,
+    score: Math.round((achievedWeight / totalWeight) * 100)
+  };
+});
 
 /**
  * Generate requirements improvements
@@ -233,9 +247,10 @@ const generateRequirementsImprovements = curry(evaluation => {
   // Address critical missing requirements first
   const criticalMissing = filter(req => req.type === 'required', notMet);
   if (criticalMissing.length > 0) {
-    criticalMissing.slice(0, 2).forEach(req => {
-      improvements.push(`Add evidence of ${req.name} experience or training`);
-    });
+    const criticalImprovements = criticalMissing
+      .slice(0, 2)
+      .map(req => `Add evidence of ${req.name} experience or training`);
+    improvements.push(...criticalImprovements);
   }
 
   // Improve partial matches

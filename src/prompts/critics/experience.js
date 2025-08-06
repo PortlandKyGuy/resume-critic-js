@@ -3,7 +3,7 @@
  * @description Experience evaluation critic prompt generator
  */
 
-const { curry, pipe, map, filter } = require('ramda');
+const { curry, map } = require('ramda');
 
 /**
  * Experience critic configuration
@@ -77,24 +77,24 @@ const EXPERIENCE_CRITIC = {
 const generateExperienceAnalysisPrompt = curry(context => {
   const { jobTitle, requiredExperience, seniorityLevel } = context;
 
-  let prompt = EXPERIENCE_CRITIC.prompts.analysis;
+  const promptParts = [EXPERIENCE_CRITIC.prompts.analysis];
 
   if (jobTitle) {
-    prompt += `\n\nTarget role: ${jobTitle}`;
+    promptParts.push(`\n\nTarget role: ${jobTitle}`);
   }
 
   if (requiredExperience) {
-    prompt += `\n\nRequired experience level: ${requiredExperience}`;
+    promptParts.push(`\n\nRequired experience level: ${requiredExperience}`);
   }
 
   if (seniorityLevel) {
-    prompt += `\n\nExpected seniority indicators for ${seniorityLevel} level:`;
-    prompt += '\n- Scope of responsibilities';
-    prompt += '\n- Team size and budget (if applicable)';
-    prompt += '\n- Strategic vs tactical focus';
+    promptParts.push(`\n\nExpected seniority indicators for ${seniorityLevel} level:`);
+    promptParts.push('\n- Scope of responsibilities');
+    promptParts.push('\n- Team size and budget (if applicable)');
+    promptParts.push('\n- Strategic vs tactical focus');
   }
 
-  return prompt;
+  return promptParts.join('');
 });
 
 /**
@@ -109,7 +109,8 @@ const analyzeExperienceProgression = curry(experiences => {
 
   // Simple progression analysis
   const titles = map(exp => exp.title || '', experiences);
-  const hasProgression = titles.some((title, idx) => idx > 0 && (title.includes('Senior') || title.includes('Lead') || title.includes('Manager')));
+  const hasProgression = titles.some((title, idx) => idx > 0
+    && (title.includes('Senior') || title.includes('Lead') || title.includes('Manager')));
 
   return {
     hasProgression,

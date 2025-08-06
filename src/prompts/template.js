@@ -24,17 +24,17 @@ const TokenType = {
  * @param {string} expr - Variable expression
  * @returns {Object} Parsed variable and default value
  */
-const parseDefaultValue = (expr) => {
+const parseDefaultValue = expr => {
   const trimmed = expr.trim();
   const match = trimmed.match(/^(.+?)\s*\|\s*"([^"]+)"$/);
-  
+
   if (match) {
     return {
       path: match[1].trim(),
       defaultValue: match[2]
     };
   }
-  
+
   return {
     path: trimmed,
     defaultValue: undefined
@@ -49,25 +49,35 @@ const parseDefaultValue = (expr) => {
  */
 const getValueFromPath = curry((path, context) => {
   const { path: cleanPath, defaultValue } = parseDefaultValue(path);
-  
+
   // Handle special loop variable
   if (cleanPath === '.' || cleanPath === 'this') {
     const value = context['.'] !== undefined ? context['.'] : context.this;
     return value !== undefined ? value : defaultValue;
   }
-  
+
   const keys = cleanPath.split('.');
-  
-  let value = context;
-  for (const key of keys) {
-    if (value && typeof value === 'object') {
-      value = value[key];
-    } else {
-      value = undefined;
-      break;
+
+  // First try direct lookup
+  const value = keys.reduce((acc, key) => {
+    if (acc && typeof acc === 'object') {
+      return acc[key];
     }
+    return undefined;
+  }, context);
+
+  // If not found and we're in a loop context, try the loop item
+  if (value === undefined && context['.'] && keys.length > 0) {
+    const loopValue = keys.reduce((acc, key) => {
+      if (acc && typeof acc === 'object') {
+        return acc[key];
+      }
+      return undefined;
+    }, context['.']);
+
+    return loopValue !== undefined ? loopValue : defaultValue;
   }
-  
+
   return value !== undefined ? value : defaultValue;
 });
 
@@ -76,64 +86,50 @@ const getValueFromPath = curry((path, context) => {
  * @param {string} template - Template string to tokenize
  * @returns {Array} Array of tokens
  */
-const tokenize = (template) => {
-  const tokens = [];
-  const regex = /\{\{([#/]?)(if|each|>)?[\s]*([^}]+?)[\s]*\}\}/g;
-  let lastIndex = 0;
-  let match;
+const tokenize = template => {
+  const regex = /\{\{([#/]?)(if|each|>)?[\s]*([^}]*?)[\s]*\}\}/g;
+  const matches = [...template.matchAll(regex)];
 
-  while ((match = regex.exec(template)) !== null) {
-    // Add text before the match
-    if (match.index > lastIndex) {
+  // Helper to determine token type
+  const getTokenType = (prefix, directive) => {
+    if (prefix === '#' && directive === 'if') return TokenType.IF_START;
+    if (prefix === '/' && directive === 'if') return TokenType.IF_END;
+    if (prefix === '#' && directive === 'each') return TokenType.EACH_START;
+    if (prefix === '/' && directive === 'each') return TokenType.EACH_END;
+    if (prefix === '' && directive === '>') return TokenType.PARTIAL;
+    if (!prefix && !directive) return TokenType.VARIABLE;
+    return null;
+  };
+
+  // Build tokens array
+  const tokens = [];
+  let lastIndex = 0;
+
+  matches.forEach(match => {
+    const [fullMatch, prefix, directive, content] = match;
+    const matchIndex = match.index;
+
+    // Add text before match
+    if (matchIndex > lastIndex) {
       tokens.push({
         type: TokenType.TEXT,
-        value: template.slice(lastIndex, match.index),
-        raw: template.slice(lastIndex, match.index)
+        value: template.slice(lastIndex, matchIndex),
+        raw: template.slice(lastIndex, matchIndex)
       });
     }
 
-    const [fullMatch, prefix, directive, content] = match;
-
-    if (prefix === '#' && directive === 'if') {
+    // Add token
+    const tokenType = getTokenType(prefix, directive);
+    if (tokenType) {
       tokens.push({
-        type: TokenType.IF_START,
-        value: content.trim(),
-        raw: fullMatch
-      });
-    } else if (prefix === '/' && directive === 'if') {
-      tokens.push({
-        type: TokenType.IF_END,
-        value: '',
-        raw: fullMatch
-      });
-    } else if (prefix === '#' && directive === 'each') {
-      tokens.push({
-        type: TokenType.EACH_START,
-        value: content.trim(),
-        raw: fullMatch
-      });
-    } else if (prefix === '/' && directive === 'each') {
-      tokens.push({
-        type: TokenType.EACH_END,
-        value: '',
-        raw: fullMatch
-      });
-    } else if (prefix === '' && directive === '>') {
-      tokens.push({
-        type: TokenType.PARTIAL,
-        value: content.trim(),
-        raw: fullMatch
-      });
-    } else if (!prefix && !directive) {
-      tokens.push({
-        type: TokenType.VARIABLE,
-        value: content.trim(),
+        type: tokenType,
+        value: tokenType === TokenType.IF_END || tokenType === TokenType.EACH_END ? '' : content.trim(),
         raw: fullMatch
       });
     }
 
-    lastIndex = match.index + fullMatch.length;
-  }
+    lastIndex = matchIndex + fullMatch.length;
+  });
 
   // Add remaining text
   if (lastIndex < template.length) {
@@ -152,11 +148,11 @@ const tokenize = (template) => {
  * @param {Array} tokens - Array of tokens
  * @returns {Array} AST nodes
  */
-const buildAST = (tokens) => {
+const buildAST = tokens => {
   const ast = [];
   const stack = [ast];
 
-  for (const token of tokens) {
+  tokens.forEach(token => {
     const current = stack[stack.length - 1];
 
     switch (token.type) {
@@ -200,9 +196,36 @@ const buildAST = (tokens) => {
       default:
         break;
     }
-  }
+  });
 
   return ast;
+};
+
+/**
+ * Compile template to AST
+ * @param {string} template - Template string
+ * @returns {Array} AST
+ */
+const compileTemplate = memoize(template => {
+  const tokens = tokenize(template);
+  return buildAST(tokens);
+});
+
+// Forward declaration for mutual recursion
+/* eslint-disable prefer-const, fp/no-let, fp/no-mutation */
+let evaluateNode;
+let render;
+
+/**
+ * Render template with context
+ * @param {string} template - Template string
+ * @param {Object} context - Data context
+ * @param {Object} partials - Partial templates
+ * @returns {string} Rendered template
+ */
+render = (template, context = {}, partials = {}) => {
+  const ast = compileTemplate(template);
+  return ast.map(node => evaluateNode(partials, context, node)).join('');
 };
 
 /**
@@ -212,7 +235,8 @@ const buildAST = (tokens) => {
  * @param {Object} partials - Partial templates
  * @returns {string} Rendered string
  */
-const evaluateNode = curry((partials, context, node) => {
+evaluateNode = curry((partials, context, node) => {
+  /* eslint-enable prefer-const, fp/no-let, fp/no-mutation */
   switch (node.type) {
     case TokenType.TEXT:
       return node.value;
@@ -224,14 +248,18 @@ const evaluateNode = curry((partials, context, node) => {
 
     case TokenType.PARTIAL: {
       const partial = partials[node.value];
-      if (!partial) return '';
+      if (!partial) {
+        throw new Error(`Partial '${node.value}' not found`);
+      }
       return render(partial, context, partials);
     }
 
     case 'IF_BLOCK': {
       const condition = getValueFromPath(node.condition, context);
       if (condition) {
-        return node.trueBranch.map(child => evaluateNode(partials, context, child)).join('');
+        return node.trueBranch
+          .map(child => evaluateNode(partials, context, child))
+          .join('');
       }
       return '';
     }
@@ -240,17 +268,21 @@ const evaluateNode = curry((partials, context, node) => {
       const collection = getValueFromPath(node.collection, context);
       if (!Array.isArray(collection)) return '';
 
-      return collection.map((item, index) => {
-        const itemContext = {
-          ...context,
-          this: item,
-          '.': item,
-          '@index': index,
-          '@first': index === 0,
-          '@last': index === collection.length - 1
-        };
-        return node.body.map(child => evaluateNode(partials, itemContext, child)).join('');
-      }).join('');
+      return collection
+        .map((item, index) => {
+          const itemContext = {
+            ...context,
+            this: item,
+            '.': item,
+            '@index': index,
+            '@first': index === 0,
+            '@last': index === collection.length - 1
+          };
+          return node.body
+            .map(child => evaluateNode(partials, itemContext, child))
+            .join('');
+        })
+        .join('');
     }
 
     default:
@@ -259,85 +291,49 @@ const evaluateNode = curry((partials, context, node) => {
 });
 
 /**
- * Compile template to AST
- * @param {string} template - Template string
- * @returns {Array} AST
- */
-const compileTemplate = memoize((template) => {
-  const tokens = tokenize(template);
-  return buildAST(tokens);
-});
-
-/**
- * Render template with context
- * @param {string} template - Template string
- * @param {Object} context - Data context
- * @param {Object} partials - Partial templates
- * @returns {string} Rendered template
- */
-const render = (template, context = {}, partials = {}) => {
-  const ast = compileTemplate(template);
-  return ast.map(node => evaluateNode(partials, context, node)).join('');
-};
-
-/**
- * Create renderer with partials
- * @param {Object} partials - Partial templates
- * @returns {Function} Render function
- */
-const createRenderer = (partials = {}) => {
-  return (template, context) => {
-    try {
-      return render(template, context, partials);
-    } catch (error) {
-      throw error;
-    }
-  };
-};
-
-/**
  * Validate template syntax
  * @param {string} template - Template to validate
  * @returns {Object} Validation result
  */
-const validateTemplate = (template) => {
+const validateTemplate = template => {
   const errors = [];
-  let ifDepth = 0;
-  let eachDepth = 0;
+  const depths = { if: 0, each: 0 };
 
   try {
     const tokens = tokenize(template);
-    
-    for (const token of tokens) {
+
+    tokens.forEach(token => {
+      /* eslint-disable fp/no-mutation */
       switch (token.type) {
         case TokenType.IF_START:
-          ifDepth++;
+          depths.if += 1;
           break;
         case TokenType.IF_END:
-          ifDepth--;
-          if (ifDepth < 0) {
+          depths.if -= 1;
+          if (depths.if < 0) {
             errors.push('Unmatched {{/if}} tag');
           }
           break;
         case TokenType.EACH_START:
-          eachDepth++;
+          depths.each += 1;
           break;
         case TokenType.EACH_END:
-          eachDepth--;
-          if (eachDepth < 0) {
+          depths.each -= 1;
+          if (depths.each < 0) {
             errors.push('Unmatched {{/each}} tag');
           }
           break;
         default:
           break;
       }
-    }
+      /* eslint-enable fp/no-mutation */
+    });
 
-    if (ifDepth > 0) {
-      errors.push(`${ifDepth} unclosed {{#if}} tag(s)`);
+    if (depths.if > 0) {
+      errors.push(`${depths.if} unclosed {{#if}} tag(s)`);
     }
-    if (eachDepth > 0) {
-      errors.push(`${eachDepth} unclosed {{#each}} tag(s)`);
+    if (depths.each > 0) {
+      errors.push(`${depths.each} unclosed {{#each}} tag(s)`);
     }
 
     return {
@@ -353,22 +349,37 @@ const validateTemplate = (template) => {
 };
 
 /**
+ * Create renderer with partials
+ * @param {Object} partials - Partial templates
+ * @returns {Function} Render function
+ */
+const createRenderer = (partials = {}) => (template, context) => {
+  // Validate template before rendering
+  const validation = validateTemplate(template);
+  if (!validation.valid) {
+    throw new Error(`Invalid template: ${validation.errors.join(', ')}`);
+  }
+
+  return render(template, context, partials);
+};
+
+/**
  * Extract variable names from template
  * @param {string} template - Template string
  * @returns {Array<string>} Variable names
  */
-const extractVariables = (template) => {
+const extractVariables = template => {
   const variables = new Set();
   const tokens = tokenize(template);
 
-  for (const token of tokens) {
+  tokens.forEach(token => {
     if (token.type === TokenType.VARIABLE) {
       const { path } = parseDefaultValue(token.value);
       variables.add(path);
     } else if (token.type === TokenType.IF_START || token.type === TokenType.EACH_START) {
       variables.add(token.value);
     }
-  }
+  });
 
   return Array.from(variables);
 };
@@ -382,7 +393,7 @@ const extractVariables = (template) => {
  */
 const safeRender = curry((partials, template, context) => {
   const validation = validateTemplate(template);
-  
+
   if (!validation.valid) {
     return {
       success: false,
@@ -410,11 +421,11 @@ module.exports = {
   render,
   createRenderer,
   compileTemplate,
-  
+
   // Validation
   validateTemplate,
   safeRender,
-  
+
   // Utilities
   tokenize,
   buildAST,
@@ -422,7 +433,7 @@ module.exports = {
   getValueFromPath,
   parseDefaultValue,
   extractVariables,
-  
+
   // Constants
   TokenType
 };

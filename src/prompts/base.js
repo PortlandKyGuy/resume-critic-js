@@ -9,8 +9,8 @@ const { curry, map, pipe, prop, filter } = require('ramda');
  * Base system prompt establishing the evaluator persona
  * @type {string}
  */
-const SYSTEM_PROMPT = `You are an expert resume evaluator with 15+ years of experience in talent acquisition across multiple industries.
-You have reviewed thousands of resumes and understand what makes candidates stand out.
+const SYSTEM_PROMPT = `You are an expert resume evaluator with 15+ years of experience in talent acquisition across 
+multiple industries. You have reviewed thousands of resumes and understand what makes candidates stand out.
 Your evaluations are objective, constructive, and actionable.
 
 Your expertise includes:
@@ -19,9 +19,12 @@ Your expertise includes:
 - ATS (Applicant Tracking System) optimization
 - Modern hiring trends and best practices
 
-You provide detailed, actionable feedback that helps candidates improve their resumes. Your scoring is consistent and based on clear criteria. You always maintain a professional, encouraging tone while being honest about areas for improvement.
+You provide detailed, actionable feedback that helps candidates improve their resumes. Your scoring is consistent 
+and based on clear criteria. You always maintain a professional, encouraging tone while being honest about areas 
+for improvement.
 
-IMPORTANT: You must always respond with valid JSON in the exact format specified. Your response must be parseable by JSON.parse() without errors.`;
+IMPORTANT: You must always respond with valid JSON in the exact format specified. 
+Your response must be parseable by JSON.parse() without errors.`;
 
 /**
  * Output schema for structured evaluation responses
@@ -111,7 +114,11 @@ const CRITICS = {
     - 30-49: Poor keyword usage, needs significant work
     - 0-29: Severely lacking relevant keywords`,
     examples: [
-      { context: 'Software Engineer role', good: 'Developed RESTful APIs using Node.js', bad: 'Made computer programs' },
+      {
+        context: 'Software Engineer role',
+        good: 'Developed RESTful APIs using Node.js',
+        bad: 'Made computer programs'
+      },
       { context: 'Data Analyst role', good: 'Analyzed datasets using Python pandas and SQL', bad: 'Worked with data' }
     ]
   },
@@ -132,7 +139,8 @@ const CRITICS = {
     - 0-29: Minimal relevant experience`,
     examples: [
       {
-        good: 'Led team of 5 engineers to deliver product 2 weeks ahead of schedule, resulting in $500K additional revenue',
+        good: 'Led team of 5 engineers to deliver product 2 weeks ahead of schedule, '
+          + 'resulting in $500K additional revenue',
         bad: 'Managed a team'
       }
     ]
@@ -254,7 +262,8 @@ const CRITICS = {
  * Batch evaluation prompt template
  * @type {string}
  */
-const BATCH_EVALUATION_TEMPLATE = `Evaluate the following resume for the {{jobTitle}} position in the {{industry}} industry.
+const BATCH_EVALUATION_TEMPLATE = `Evaluate the following resume for the {{jobTitle}} position 
+in the {{industry}} industry.
 
 {{#if jobRequirements}}
 Job Requirements:
@@ -268,7 +277,8 @@ Resume Content:
 {{resumeContent}}
 ---
 
-Provide a comprehensive evaluation using ALL of the following critics. Each critic should be evaluated independently with its own score and feedback.
+Provide a comprehensive evaluation using ALL of the following critics. 
+Each critic should be evaluated independently with its own score and feedback.
 
 CRITICS TO EVALUATE:
 {{#each critics}}
@@ -284,7 +294,9 @@ You must respond with valid JSON that matches this exact structure:
     {
       "critic": "keyword",
       "score": 75,
-      "feedback": "The resume includes relevant technical keywords like 'React', 'Node.js', and 'AWS'. However, it lacks industry-specific terms like 'microservices' and 'CI/CD' that appear in the job description. The keyword density is appropriate without stuffing.",
+      "feedback": "The resume includes relevant technical keywords like 'React', 'Node.js', and 'AWS'. "
+        + "However, it lacks industry-specific terms like 'microservices' and 'CI/CD' that appear in the "
+        + "job description. The keyword density is appropriate without stuffing.",
       "improvements": [
         "Add 'microservices architecture' to match job requirements",
         "Include 'CI/CD pipeline' experience if applicable",
@@ -294,7 +306,9 @@ You must respond with valid JSON that matches this exact structure:
     // ... evaluations for all critics
   ],
   "overall_score": 72,
-  "summary": "This resume shows strong technical experience but needs optimization for the specific role. The candidate demonstrates relevant skills but should better highlight their impact and align keywords with the job description. With targeted improvements, this could be a competitive application.",
+  "summary": "This resume shows strong technical experience but needs optimization for the specific role. " +
+    "The candidate demonstrates relevant skills but should better highlight their impact and align keywords " +
+    "with the job description. With targeted improvements, this could be a competitive application.",
   "top_strengths": [
     "Strong technical background in required technologies",
     "Clear demonstration of career progression",
@@ -325,7 +339,8 @@ const EXAMPLE_EVALUATION = {
     {
       critic: 'keyword',
       score: 75,
-      feedback: 'The resume demonstrates good keyword usage with relevant technical terms. However, it could benefit from more industry-specific terminology to improve ATS compatibility.',
+      feedback: 'The resume demonstrates good keyword usage with relevant technical terms. '
+        + 'However, it could benefit from more industry-specific terminology to improve ATS compatibility.',
       improvements: [
         'Add more action verbs at the beginning of bullet points',
         'Include specific technologies mentioned in job descriptions',
@@ -334,7 +349,9 @@ const EXAMPLE_EVALUATION = {
     }
   ],
   overall_score: 72,
-  summary: 'This resume shows strong potential with relevant experience and skills. The main areas for improvement are keyword optimization and quantifying achievements to better demonstrate impact.',
+  summary: 'This resume shows strong potential with relevant experience and skills. '
+    + 'The main areas for improvement are keyword optimization and quantifying achievements '
+    + 'to better demonstrate impact.',
   top_strengths: [
     'Clear technical skills section',
     'Relevant work experience',

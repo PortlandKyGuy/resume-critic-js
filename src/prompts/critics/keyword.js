@@ -75,23 +75,23 @@ const KEYWORD_CRITIC = {
  * @returns {string} Analysis prompt
  */
 const generateKeywordAnalysisPrompt = curry(context => {
-  const { jobRequirements = [], industry, jobTitle } = context;
+  const { jobRequirements = [], industry } = context;
 
-  let prompt = KEYWORD_CRITIC.prompts.analysis;
+  const promptParts = [KEYWORD_CRITIC.prompts.analysis];
 
   if (jobRequirements.length > 0) {
-    prompt += '\n\nRequired keywords from job description:\n';
-    prompt += jobRequirements.map(req => `- ${req}`).join('\n');
+    promptParts.push('\n\nRequired keywords from job description:\n');
+    promptParts.push(jobRequirements.map(req => `- ${req}`).join('\n'));
   }
 
   if (industry && industry !== 'general') {
-    prompt += `\n\nIndustry-specific terms to look for (${industry}):`;
-    prompt += '\n- Technical skills and tools commonly used';
-    prompt += '\n- Industry certifications and standards';
-    prompt += '\n- Domain-specific methodologies';
+    promptParts.push(`\n\nIndustry-specific terms to look for (${industry}):`);
+    promptParts.push('\n- Technical skills and tools commonly used');
+    promptParts.push('\n- Industry certifications and standards');
+    promptParts.push('\n- Domain-specific methodologies');
   }
 
-  return prompt;
+  return promptParts.join('');
 });
 
 /**
@@ -102,7 +102,9 @@ const generateKeywordAnalysisPrompt = curry(context => {
 const extractKeywords = curry(text => {
   // Simple keyword extraction - in production, use NLP library
   const words = text.toLowerCase().split(/\W+/);
-  const stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for'];
+  const stopWords = [
+    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for'
+  ];
 
   return pipe(
     filter(word => word.length > 3),
