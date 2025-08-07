@@ -45,7 +45,12 @@ const createEvaluationValidator = () => validate([
     .isString()
     .withMessage('Industry must be a string')
     .isIn(['general', 'software-engineering'])
-    .withMessage('Invalid industry')
+    .withMessage('Invalid industry'),
+
+  body('job_fit_score')
+    .optional()
+    .isFloat({ min: 0, max: 1 })
+    .withMessage('Job fit score must be between 0 and 1')
 ]);
 
 const createComparisonValidator = () => validate([

@@ -86,10 +86,12 @@ const getDefaultResponses = () => ({
     issues: [],
     suggestions: ['Consider using more action verbs']
   }),
-  // Relevance critic response
-  'relevance score': JSON.stringify({
+  // Relevance critic response - matches the actual prompt text
+  'evaluate how well this resume is tailored': JSON.stringify({
     score: 4,
-    reasoning: 'Strong alignment with job requirements, relevant experience highlighted'
+    strengths: ['Strong technical background aligns with job requirements', 'Leadership experience matches the seniority level'],
+    gaps: ['Missing specific cloud platform experience mentioned in JD'],
+    suggestions: ['Highlight AWS/GCP experience more prominently', 'Add metrics to quantify team leadership impact']
   }),
   // Language critic response
   'language quality': JSON.stringify({
@@ -103,6 +105,24 @@ const getDefaultResponses = () => ({
     recommendation: 'proceed_with_full_evaluation',
     key_gaps: ['Advanced cloud architecture experience'],
     transferable_strengths: ['Strong programming skills', 'Team leadership']
+  }),
+  // Job fit critic response - matches the actual prompt text
+  "evaluate the candidate's fundamental fit": JSON.stringify({
+    job_fit_score: 0.78,
+    match_category: 'good',
+    experience_level_match: true,
+    core_skills_match: true,
+    industry_match: true,
+    key_gaps: ['Advanced cloud architecture experience'],
+    transferable_strengths: ['Strong programming skills', 'Team leadership'],
+    fit_summary: 'Strong technical background with relevant experience in Node.js and cloud technologies',
+    recommendation: 'proceed_with_full_evaluation',
+    experience_score: 0.8,
+    skills_score: 0.75,
+    industry_score: 0.85,
+    level_score: 0.8,
+    essential_requirements_score: 0.7,
+    __debug_reasoning__: 'Candidate has strong Node.js and React experience matching the job requirements'
   }),
   'summary evaluation': JSON.stringify({
     evaluations: [{

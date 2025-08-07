@@ -52,7 +52,8 @@ const createEvaluationRoutes = () => {
       model: body.model || getConfig('llm.model', 'gpt-4o-mini'),
       temperature: body.temperature || getConfig('llm.temperature', 0.7),
       process_markdown: body.process_markdown !== false,
-      max_workers: body.max_workers || 6
+      max_workers: body.max_workers || 6,
+      job_fit_score: body.job_fit_score !== undefined ? body.job_fit_score : null
     })
   );
 
@@ -392,13 +393,23 @@ const createEvaluationRoutes = () => {
       }
 
       // Build all critic prompts
-      const critics = [
-        prompts.jobFitCritic(params.job_description, params.resume),
+      const critics = [];
+
+      // Only add job fit critic if score not provided (check for null specifically to allow 0)
+      if (params.job_fit_score === null) {
+        logger.debug('Job fit score not provided, running job fit critic');
+        critics.push(prompts.jobFitCritic(params.job_description, params.resume));
+      } else {
+        logger.info('Job fit score provided by user', { job_fit_score: params.job_fit_score });
+      }
+
+      // Add remaining critics
+      critics.push(
         prompts.keywordCritic(params.job_description, params.resume, requiredTerms),
         prompts.readabilityCritic(params.job_description, params.resume),
         prompts.relevanceCritic(params.job_description, params.resume),
         prompts.languageCritic(params.job_description, params.resume)
-      ];
+      );
 
       // Add related accomplishments critic if section exists
       if (hasRelatedAccomplishments) {
@@ -437,8 +448,19 @@ const createEvaluationRoutes = () => {
 
       // Parse results and extract scores dynamically based on critics used
       let criticIndex = 0;
-      const jobFitResult = results[criticIndex];
-      criticIndex += 1;
+      let jobFitResult = null;
+      let jobFitScore = 0.0;
+
+      // Handle job fit score - either from parameter or from critic
+      if (params.job_fit_score !== null) {
+        jobFitScore = params.job_fit_score;
+        jobFitResult = { job_fit_score: jobFitScore, fit_summary: 'Job fit score provided by user' };
+      } else {
+        jobFitResult = results[criticIndex];
+        jobFitScore = jobFitResult?.job_fit_score || 0.0;
+        criticIndex += 1;
+      }
+
       const keywordResult = results[criticIndex];
       criticIndex += 1;
       const readabilityResult = results[criticIndex];
@@ -453,20 +475,21 @@ const createEvaluationRoutes = () => {
       if (params.original_resume) criticIndex += 1;
       const opportunityResult = params.original_resume ? results[criticIndex] : null;
 
-      // Extract job fit score
-      const jobFitScore = jobFitResult?.job_fit_score || 0.0;
-
       // Calculate fidelity score
       const fidelityScore = fidelityResult ? (fidelityResult.score || 1.0) : 1.0;
 
       // Map results to named structure
       const namedResults = {
-        job_fit: jobFitResult,
         keyword: keywordResult,
         readability: readabilityResult,
         relevance: relevanceResult,
         language: languageResult
       };
+
+      // Only include job_fit in results if we have a valid result
+      if (jobFitResult) {
+        namedResults.job_fit = jobFitResult;
+      }
 
       if (relatedAccomplishmentsResult) {
         namedResults.related_accomplishments = relatedAccomplishmentsResult;
