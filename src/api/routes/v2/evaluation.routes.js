@@ -7,6 +7,8 @@ const prompts = require('../../../prompts/prompts');
 const { getConfig } = require('../../../utils/config');
 const { logger } = require('../../../utils/logger');
 const { parseJsonResponse } = require('../../../utils/json-parser');
+const { responseLogger } = require('../../middleware/response-logger.middleware');
+const { identifyCritic } = require('../../../utils/critic-identifier');
 
 const createEvaluationRoutes = () => {
   const router = express.Router();
@@ -426,18 +428,35 @@ const createEvaluationRoutes = () => {
 
       // Execute all critics in parallel (same as v1)
       const results = await Promise.all(
-        critics.map(critic => client.complete({
-          system: critic.systemPrompt,
-          user: critic.userPrompt
-        }).then(response => {
-          const parsed = parseJsonResponse(response);
-          if (!parsed) {
-            logger.error('Failed to parse critic response', {
-              responsePreview: response.substring(0, 200)
-            });
-          }
-          return parsed;
-        }))
+        critics.map((critic, index) => {
+          // Log which critic is being called
+          const criticName = identifyCritic(critic.systemPrompt, index);
+
+          logger.debug(`Calling ${criticName} critic`, {
+            criticIndex: index,
+            systemPromptLength: critic.systemPrompt.length,
+            userPromptLength: critic.userPrompt.length
+          });
+
+          return client.complete({
+            system: critic.systemPrompt,
+            user: critic.userPrompt
+          }).then(response => {
+            const parsed = parseJsonResponse(response);
+            if (!parsed) {
+              logger.error(`Failed to parse ${criticName} critic response`, {
+                critic: criticName,
+                responsePreview: response.substring(0, 200)
+              });
+            } else {
+              logger.debug(`Successfully parsed ${criticName} critic response`, {
+                critic: criticName,
+                parsedKeys: Object.keys(parsed)
+              });
+            }
+            return parsed;
+          });
+        })
       );
 
       // Parse results and extract scores dynamically based on critics used
@@ -644,18 +663,35 @@ const createEvaluationRoutes = () => {
 
       // Execute all critics in parallel
       const results = await Promise.all(
-        critics.map(critic => client.complete({
-          system: critic.systemPrompt,
-          user: critic.userPrompt
-        }).then(response => {
-          const parsed = parseJsonResponse(response);
-          if (!parsed) {
-            logger.error('Failed to parse critic response', {
-              responsePreview: response.substring(0, 200)
-            });
-          }
-          return parsed;
-        }))
+        critics.map((critic, index) => {
+          // Log which critic is being called
+          const criticName = identifyCritic(critic.systemPrompt, index);
+
+          logger.debug(`Calling ${criticName} critic`, {
+            criticIndex: index,
+            systemPromptLength: critic.systemPrompt.length,
+            userPromptLength: critic.userPrompt.length
+          });
+
+          return client.complete({
+            system: critic.systemPrompt,
+            user: critic.userPrompt
+          }).then(response => {
+            const parsed = parseJsonResponse(response);
+            if (!parsed) {
+              logger.error(`Failed to parse ${criticName} critic response`, {
+                critic: criticName,
+                responsePreview: response.substring(0, 200)
+              });
+            } else {
+              logger.debug(`Successfully parsed ${criticName} critic response`, {
+                critic: criticName,
+                parsedKeys: Object.keys(parsed)
+              });
+            }
+            return parsed;
+          });
+        })
       );
 
       // Execute fidelity check separately (different response format)
@@ -831,6 +867,7 @@ const createEvaluationRoutes = () => {
 
   router.post(
     '/evaluate',
+    responseLogger(),
     createEvaluationValidator(),
     sanitizeRequest,
     createEvaluationHandler()
@@ -838,6 +875,7 @@ const createEvaluationRoutes = () => {
 
   router.post(
     '/evaluate/cover-letter',
+    responseLogger(),
     createCoverLetterValidator(),
     sanitizeRequest,
     createCoverLetterEvaluationHandler()

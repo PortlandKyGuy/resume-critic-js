@@ -62,6 +62,11 @@ const createOpenAIComplete = (client, defaults) => async options => {
       messageCount: messages.length,
       maxTokens: finalCompletionOptions.max_tokens,
       temperature: finalCompletionOptions.temperature,
+      messages: messages.map(m => ({
+        role: m.role,
+        contentLength: m.content.length,
+        contentPreview: m.content.substring(0, 200) + (m.content.length > 200 ? '...' : '')
+      })),
       hasOptionalParams: !!(options.responseFormat || options.seed || options.topP
         || options.frequencyPenalty || options.presencePenalty)
     });
@@ -70,6 +75,12 @@ const createOpenAIComplete = (client, defaults) => async options => {
 
     const duration = Date.now() - startTime;
     const { content } = response.choices[0].message;
+
+    logger.debug('OpenAI: Received response', {
+      responseLength: content.length,
+      responsePreview: content.substring(0, 500) + (content.length > 500 ? '...' : ''),
+      finishReason: response.choices[0].finish_reason
+    });
 
     logger.info('OpenAI: Completion successful', {
       duration,

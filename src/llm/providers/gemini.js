@@ -67,6 +67,7 @@ const createGeminiComplete = (genAI, defaults) => async options => {
     logger.debug('Gemini: Sending request', {
       model: options.model || defaults.model,
       promptLength: prompt.length,
+      promptPreview: prompt.substring(0, 500) + (prompt.length > 500 ? '...' : ''),
       maxOutputTokens: generationConfig.maxOutputTokens,
       temperature: generationConfig.temperature,
       hasOptionalParams: !!(options.topP || options.topK),
@@ -107,6 +108,12 @@ const createGeminiComplete = (genAI, defaults) => async options => {
       logger.error('Gemini: Empty response received', { duration });
       throw new Error('Empty response from Gemini');
     }
+
+    logger.debug('Gemini: Received response', {
+      responseLength: text.length,
+      responsePreview: text.substring(0, 500) + (text.length > 500 ? '...' : ''),
+      finishReason: response.candidates?.[0]?.finishReason
+    });
 
     logger.info('Gemini: Completion successful', {
       duration,

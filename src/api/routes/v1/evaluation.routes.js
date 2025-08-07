@@ -4,6 +4,7 @@ const { sanitizeRequest } = require('../../middleware/validation.middleware');
 const { createEvaluationValidator } = require('../../validators/evaluation.validators');
 const prompts = require('../../../prompts/prompts');
 const { createLLMClient } = require('../../../llm/client');
+const { responseLogger } = require('../../middleware/response-logger.middleware');
 
 const createEvaluationRoutes = () => {
   const router = express.Router();
@@ -253,6 +254,7 @@ const createEvaluationRoutes = () => {
   // Routes
   router.post(
     '/evaluate',
+    responseLogger(),
     createEvaluationValidator(),
     sanitizeRequest,
     createEvaluationHandler()
@@ -260,6 +262,7 @@ const createEvaluationRoutes = () => {
 
   router.post(
     '/evaluate-files',
+    responseLogger(),
     // File upload middleware will be added later
     sanitizeRequest,
     createFileEvaluationHandler()
