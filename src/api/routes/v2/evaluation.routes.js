@@ -564,6 +564,7 @@ const createEvaluationRoutes = () => {
         critic_results: namedResults,
         normalized_scores: normalizedScores,
         raw_results: rawResults,
+        weights: v2Weights,
         extracted_keywords: requiredTerms,
         enhancement_suggestions: enhancementSuggestions,
         opportunity_score: opportunityScore !== null ? Math.round(opportunityScore * 100) / 100 : null,
