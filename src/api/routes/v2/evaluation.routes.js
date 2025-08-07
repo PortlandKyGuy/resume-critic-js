@@ -499,12 +499,21 @@ const createEvaluationRoutes = () => {
       }
 
       // Determine improvement recommendation
-      const recommendation = determineImprovementRecommendation(
+      let recommendation = determineImprovementRecommendation(
         jobFitScore,
         qualityScore,
         compositeScore,
         fidelityScore
       );
+
+      // Dynamic strategy adjustment: If already optimized but missing key highlights
+      if (recommendation.stop_reason === 'already_optimized' && opportunityScore !== null && opportunityScore < 0.6) {
+        recommendation = {
+          should_improve: true,
+          strategy: 'add_highlighted_experiences',
+          stop_reason: null
+        };
+      }
 
       // Build v2 response
       const threshold = getConfig('evaluation.threshold', 0.75);
