@@ -126,10 +126,12 @@ const createEvaluationRoutes = () => {
 
       // Build all critic prompts
       const critics = [
+        prompts.jobFitScore(params.job_description, params.resume),
         prompts.keywordCritic(params.job_description, params.resume),
         prompts.readabilityCritic(params.job_description, params.resume),
         prompts.relevanceCritic(params.job_description, params.resume),
-        prompts.languageCritic(params.job_description, params.resume)
+        prompts.languageCritic(params.job_description, params.resume),
+        prompts.fidelityCritic(params.job_description, params.resume, params.original_resume)
       ];
 
       // Execute all critics in parallel (same as v1)
