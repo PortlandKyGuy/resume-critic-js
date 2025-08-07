@@ -10,7 +10,6 @@ const { coverLetterOpportunityCritic } = require('./coverLetterOpportunity.criti
 const { coverLetterFidelityCritic } = require('./fidelity.critic');
 const { coverLetterLanguageCritic } = require('./coverLetterLanguage.critic');
 const { coverLetterRelevanceCritic } = require('./coverLetterRelevance.critic');
-const { coverLetterKeywordCritic } = require('./coverLetterKeyword.critic');
 const { coverLetterReadabilityCritic } = require('./coverLetterReadability.critic');
 
 module.exports = {
@@ -26,6 +25,5 @@ module.exports = {
   coverLetterFidelityCritic,
   coverLetterLanguageCritic,
   coverLetterRelevanceCritic,
-  coverLetterKeywordCritic,
   coverLetterReadabilityCritic
 };
