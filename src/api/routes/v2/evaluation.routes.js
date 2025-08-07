@@ -561,6 +561,7 @@ const createEvaluationRoutes = () => {
           improvement_focus: getImprovementFocus(jobFitScore, qualityScore, namedResults),
           fidelity_risk_factors: identifyFidelityRisks(jobFitScore, fidelityScore)
         },
+        critic_results: namedResults,
         normalized_scores: normalizedScores,
         raw_results: rawResults,
         extracted_keywords: requiredTerms,
