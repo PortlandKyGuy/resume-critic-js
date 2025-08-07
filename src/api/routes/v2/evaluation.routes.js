@@ -34,6 +34,7 @@ const createEvaluationRoutes = () => {
       job_description: body.job_description,
       resume: body.resume,
       original_resume: body.original_resume || null,
+      required_terms: body.required_terms || null,
       provider: body.provider || getConfig('llm.provider', 'openai'),
       model: body.model || getConfig('llm.model', 'gpt-4o-mini'),
       temperature: body.temperature || getConfig('llm.temperature', 0.7),
@@ -336,10 +337,22 @@ const createEvaluationRoutes = () => {
         useMock: getConfig('llm.useMock', false)
       });
 
+      // Extract keywords if not provided
+      let requiredTerms = params.required_terms;
+      if (!requiredTerms) {
+        logger.info('Extracting keywords from job description');
+        const keywordPrompt = prompts.keywordExtractor(params.job_description);
+        requiredTerms = await client.complete({
+          system: keywordPrompt.systemPrompt,
+          user: keywordPrompt.userPrompt
+        });
+        logger.debug('Extracted keywords', { keywords: requiredTerms });
+      }
+
       // Build all critic prompts
       const critics = [
         prompts.jobFitCritic(params.job_description, params.resume),
-        prompts.keywordCritic(params.job_description, params.resume),
+        prompts.keywordCritic(params.job_description, params.resume, requiredTerms),
         prompts.readabilityCritic(params.job_description, params.resume),
         prompts.relevanceCritic(params.job_description, params.resume),
         prompts.languageCritic(params.job_description, params.resume)
@@ -444,6 +457,7 @@ const createEvaluationRoutes = () => {
         },
         normalized_scores: normalizedScores,
         raw_results: rawResults,
+        extracted_keywords: requiredTerms,
         pass: compositeScore >= threshold,
         threshold,
         jd_file: 'job_description.txt',

@@ -6,6 +6,7 @@ const { comparisonCritic } = require('./comparison.critic');
 const { relatedAccomplishmentsCritic } = require('./relatedAccomplishments.critic');
 const { fidelityCritic } = require('./fidelity.critic');
 const { jobFitCritic } = require('./jobFit.critic');
+const { keywordExtractor } = require('./keywordExtractor');
 const { coverLetterToneCritic } = require('./coverLetterTone.critic');
 const { coverLetterPersonalizationCritic } = require('./coverLetterPersonalization.critic');
 const { coverLetterOpportunityCritic } = require('./coverLetterOpportunity.critic');
@@ -23,6 +24,7 @@ module.exports = {
   relatedAccomplishmentsCritic,
   fidelityCritic,
   jobFitCritic,
+  keywordExtractor,
   coverLetterToneCritic,
   coverLetterPersonalizationCritic,
   coverLetterOpportunityCritic,
