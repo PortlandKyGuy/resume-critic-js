@@ -660,6 +660,44 @@ paths:
         500:
           $ref: '#/components/responses/ServerError'
 
+  /v2/evaluate/job-fit:
+    post:
+      summary: Evaluate Job Fit (V2)
+      description: |
+        API v2: Enhanced job fit assessment with strategic recommendations.
+        
+        This lightweight endpoint provides:
+        - Rapid candidate-job compatibility assessment
+        - Categorized match levels (excellent/good/fair/poor)
+        - Clear proceed/caution/stop recommendations
+        - Identification of key gaps and transferable strengths
+        - Strategic guidance on improvement potential
+        
+        Key features:
+        - Uses original resume when provided for accurate assessment
+        - Falls back to provided resume if original not available
+        - Consistent job-fit scoring across all v2 endpoints
+        - Designed for pre-screening before full evaluation
+      operationId: evaluateJobFitV2
+      tags:
+        - V2 Enhanced
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobFitRequestV2'
+      responses:
+        200:
+          description: Enhanced job fit assessment results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobFitResponseV2'
+        422:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
 
   /audit/logs/{audit_id}:
     get:
@@ -2025,6 +2063,95 @@ components:
           type: string
           enum: [v2]
 
+    JobFitRequestV2:
+      type: object
+      required:
+        - job_description
+        - resume
+      properties:
+        job_description:
+          type: string
+          description: The job description to evaluate against
+        resume:
+          type: string
+          description: The resume to evaluate
+        original_resume:
+          type: string
+          description: Original resume for more accurate job-fit assessment (recommended)
+        provider:
+          type: string
+          enum: [openai, ollama, gemini]
+          default: openai
+        model:
+          type: string
+          default: o4-mini
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          default: 0.7
+        process_markdown:
+          type: boolean
+          default: true
+          description: Whether to process markdown in the resume before evaluation
+
+    JobFitResponseV2:
+      type: object
+      properties:
+        job_fit_score:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Job fit score (0.0-1.0)
+        match_category:
+          type: string
+          enum: [excellent, good, fair, poor]
+          description: Categorized match level
+        recommendation:
+          type: string
+          enum: [proceed_with_full_evaluation, proceed_with_caution, do_not_proceed]
+          description: Recommendation for next steps
+        should_improve:
+          type: boolean
+          description: Whether the candidate should improve their resume before applying
+        improvement_strategy:
+          type: string
+          description: Strategic guidance on how to improve fit (if applicable)
+        improvement_potential:
+          type: string
+          enum: [high, moderate, low, minimal]
+          description: Potential for improvement through resume optimization
+        key_gaps:
+          type: array
+          items:
+            type: string
+          description: List of fundamental missing requirements
+        transferable_strengths:
+          type: array
+          items:
+            type: string
+          description: List of relevant transferable skills
+        recommendations:
+          type: array
+          items:
+            type: string
+          description: Specific recommendations for the candidate
+        execution_time:
+          type: number
+        llm_provider:
+          type: string
+        llm_model:
+          type: string
+        llm_temperature:
+          type: number
+        process_markdown:
+          type: boolean
+        version:
+          type: string
+        api_version:
+          type: string
+          enum: [v2]
+
     AuditEventType:
       type: string
       enum:
@@ -2034,6 +2161,7 @@ components:
         - fidelity_check
         - comprehensive_evaluation
         - job_fit_evaluation
+        - job_fit_evaluation_v2
 
     CriticResultAudit:
       type: object

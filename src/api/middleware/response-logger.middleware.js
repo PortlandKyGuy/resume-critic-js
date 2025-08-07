@@ -29,8 +29,8 @@ const responseLogger = () => (req, res, next) => {
         url: req.originalUrl,
         statusCode: res.statusCode,
         responseSize: JSON.stringify(data).length,
-        // Log full response in debug mode
-        responseData: data
+        // Pretty-print JSON response for better readability
+        responseData: JSON.stringify(data, null, 2)
       });
     } else {
       // In non-debug mode, just log basic info

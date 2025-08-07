@@ -1,7 +1,7 @@
 const express = require('express');
 const { asyncHandler } = require('../../../utils/errors');
 const { sanitizeRequest } = require('../../middleware/validation.middleware');
-const { createEvaluationValidator, createCoverLetterValidator } = require('../../validators/evaluation.validators');
+const { createEvaluationValidator, createCoverLetterValidator, createJobFitValidator } = require('../../validators/evaluation.validators');
 const { createLLMClient } = require('../../../llm/client');
 const prompts = require('../../../prompts/prompts');
 const { getConfig } = require('../../../utils/config');
@@ -9,6 +9,7 @@ const { logger } = require('../../../utils/logger');
 const { parseJsonResponse } = require('../../../utils/json-parser');
 const { responseLogger } = require('../../middleware/response-logger.middleware');
 const { identifyCritic } = require('../../../utils/critic-identifier');
+const { createJobFitHandler } = require('../../handlers/jobFit.handler');
 
 const createEvaluationRoutes = () => {
   const router = express.Router();
@@ -879,6 +880,14 @@ const createEvaluationRoutes = () => {
     createCoverLetterValidator(),
     sanitizeRequest,
     createCoverLetterEvaluationHandler()
+  );
+
+  router.post(
+    '/evaluate/job-fit',
+    responseLogger(),
+    createJobFitValidator(),
+    sanitizeRequest,
+    createJobFitHandler()
   );
 
   return router;

@@ -124,6 +124,60 @@ const getDefaultResponses = () => ({
     essential_requirements_score: 0.7,
     __debug_reasoning__: 'Candidate has strong Node.js and React experience matching the job requirements'
   }),
+  // Excellent fit scenario
+  'senior python/django engineer': JSON.stringify({
+    job_fit_score: 0.92,
+    match_category: 'excellent',
+    experience_level_match: true,
+    core_skills_match: true,
+    industry_match: true,
+    key_gaps: [],
+    transferable_strengths: ['Full-stack development', 'DevOps experience', 'Team mentoring'],
+    fit_summary: 'Excellent alignment with all core requirements and desired qualifications',
+    recommendation: 'proceed_with_full_evaluation',
+    experience_score: 0.95,
+    skills_score: 0.90,
+    industry_score: 0.92,
+    level_score: 0.88,
+    essential_requirements_score: 0.95,
+    __debug_reasoning__: 'Candidate exceeds requirements with 7+ years Python/Django, AWS, and container experience'
+  }),
+  // Poor fit scenario
+  'marketing manager': JSON.stringify({
+    job_fit_score: 0.25,
+    match_category: 'poor',
+    experience_level_match: false,
+    core_skills_match: false,
+    industry_match: false,
+    key_gaps: ['No technical programming experience', 'No software development background', 'Different industry'],
+    transferable_strengths: ['Project management', 'Communication skills'],
+    fit_summary: 'Fundamental mismatch in core qualifications and industry background',
+    recommendation: 'do_not_proceed',
+    experience_score: 0.1,
+    skills_score: 0.2,
+    industry_score: 0.15,
+    level_score: 0.5,
+    essential_requirements_score: 0.1,
+    __debug_reasoning__: 'Marketing background with no technical skills required for engineering role'
+  }),
+  // Fair fit scenario
+  'junior developer': JSON.stringify({
+    job_fit_score: 0.55,
+    match_category: 'fair',
+    experience_level_match: false,
+    core_skills_match: true,
+    industry_match: true,
+    key_gaps: ['Limited years of experience', 'No senior-level responsibilities'],
+    transferable_strengths: ['Strong technical foundation', 'Relevant technology stack', 'Growth potential'],
+    fit_summary: 'Has relevant skills but lacks the seniority and depth of experience',
+    recommendation: 'proceed_with_caution',
+    experience_score: 0.4,
+    skills_score: 0.7,
+    industry_score: 0.8,
+    level_score: 0.3,
+    essential_requirements_score: 0.6,
+    __debug_reasoning__: 'Junior developer with right skills but insufficient experience for senior role'
+  }),
   'summary evaluation': JSON.stringify({
     evaluations: [{
       critic: 'summary',
