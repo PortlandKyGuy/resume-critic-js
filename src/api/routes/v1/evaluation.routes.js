@@ -169,12 +169,14 @@ const createEvaluationRoutes = () => {
 
   const createEvaluationHandler = () => asyncHandler(async (req, res) => {
     const startTime = Date.now();
+    // eslint-disable-next-line global-require
+    const { getConfig } = require('../../../utils/config');
     const {
       job_description: jobDescription,
       resume,
-      provider = 'openai',
-      model = 'gpt-4o-mini',
-      temperature = 0.7,
+      provider = getConfig('llm.provider', 'openai'),
+      model = getConfig('llm.model', 'gpt-4o-mini'),
+      temperature = getConfig('llm.temperature', 0.7),
       process_markdown: processMarkdown = true,
       max_workers: maxWorkers = 6
     } = req.body;
@@ -187,8 +189,6 @@ const createEvaluationRoutes = () => {
     ];
 
     // Get LLM config
-    // eslint-disable-next-line global-require
-    const { getConfig } = require('../../../utils/config');
     const useMock = getConfig('llm.useMock', false);
 
     const client = await createLLMClient({

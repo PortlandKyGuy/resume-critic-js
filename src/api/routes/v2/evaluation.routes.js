@@ -23,9 +23,9 @@ const createEvaluationRoutes = () => {
       job_description: body.job_description,
       resume: body.resume,
       original_resume: body.original_resume || null,
-      provider: body.provider || 'openai',
-      model: body.model || 'gpt-4o-mini',
-      temperature: body.temperature || 0.7,
+      provider: body.provider || getConfig('llm.provider', 'openai'),
+      model: body.model || getConfig('llm.model', 'gpt-4o-mini'),
+      temperature: body.temperature || getConfig('llm.temperature', 0.7),
       process_markdown: body.process_markdown !== false,
       max_workers: body.max_workers || 6
     })
@@ -194,7 +194,14 @@ const createEvaluationRoutes = () => {
   // Cover letter evaluation handler
   const createCoverLetterEvaluationHandler = () => asyncHandler(async (req, res) => {
     const startTime = Date.now();
-    const { job_description: jobDescription, original_resume: originalResume, cover_letter: coverLetter, provider = 'openai', model = 'gpt-4o-mini', temperature = 0.1 } = req.body;
+    const {
+      job_description: jobDescription,
+      original_resume: originalResume,
+      cover_letter: coverLetter,
+      provider = getConfig('llm.provider', 'openai'),
+      model = getConfig('llm.model', 'gpt-4o-mini'),
+      temperature = 0.1
+    } = req.body;
 
     try {
       // Create LLM client
