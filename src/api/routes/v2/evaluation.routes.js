@@ -28,6 +28,19 @@ const createEvaluationRoutes = () => {
     opportunity: 0.15 // missing key achievements
   };
 
+  // Check if resume contains a Related Accomplishments section
+  const hasRelatedAccomplishmentsSection = resume => {
+    const resumeLower = resume.toLowerCase();
+    const patterns = [
+      'related accomplishments',
+      'related achievements',
+      'key accomplishments',
+      'notable accomplishments',
+      'selected accomplishments'
+    ];
+    return patterns.some(pattern => resumeLower.includes(pattern));
+  };
+
   // Extract evaluation parameters from request
   const extractEvaluationParams = body => (
     ({
@@ -353,6 +366,12 @@ const createEvaluationRoutes = () => {
         logger.debug('Extracted keywords', { keywords: requiredTerms });
       }
 
+      // Check for Related Accomplishments section
+      const hasRelatedAccomplishments = hasRelatedAccomplishmentsSection(params.resume);
+      if (!hasRelatedAccomplishments) {
+        logger.info('Related Accomplishments section not found in resume - skipping RelatedAccomplishmentsCritic');
+      }
+
       // Build all critic prompts
       const critics = [
         prompts.jobFitCritic(params.job_description, params.resume),
@@ -361,6 +380,11 @@ const createEvaluationRoutes = () => {
         prompts.relevanceCritic(params.job_description, params.resume),
         prompts.languageCritic(params.job_description, params.resume)
       ];
+
+      // Add related accomplishments critic if section exists
+      if (hasRelatedAccomplishments) {
+        critics.push(prompts.relatedAccomplishmentsCritic(params.job_description, params.resume));
+      }
 
       // Add fidelity critic if original resume provided
       if (params.original_resume) {
@@ -392,8 +416,23 @@ const createEvaluationRoutes = () => {
         }))
       );
 
-      // Parse results and extract scores
-      const [jobFitResult, keywordResult, readabilityResult, relevanceResult, languageResult, fidelityResult, opportunityResult] = results;
+      // Parse results and extract scores dynamically based on critics used
+      let criticIndex = 0;
+      const jobFitResult = results[criticIndex];
+      criticIndex += 1;
+      const keywordResult = results[criticIndex];
+      criticIndex += 1;
+      const readabilityResult = results[criticIndex];
+      criticIndex += 1;
+      const relevanceResult = results[criticIndex];
+      criticIndex += 1;
+      const languageResult = results[criticIndex];
+      criticIndex += 1;
+      const relatedAccomplishmentsResult = hasRelatedAccomplishments ? results[criticIndex] : null;
+      if (hasRelatedAccomplishments) criticIndex += 1;
+      const fidelityResult = params.original_resume ? results[criticIndex] : null;
+      if (params.original_resume) criticIndex += 1;
+      const opportunityResult = params.original_resume ? results[criticIndex] : null;
 
       // Extract job fit score
       const jobFitScore = jobFitResult?.job_fit_score || 0.0;
@@ -409,6 +448,10 @@ const createEvaluationRoutes = () => {
         relevance: relevanceResult,
         language: languageResult
       };
+
+      if (relatedAccomplishmentsResult) {
+        namedResults.related_accomplishments = relatedAccomplishmentsResult;
+      }
 
       if (fidelityResult) {
         namedResults.fidelity = fidelityResult;
