@@ -25,7 +25,7 @@ const createEvaluationRoutes = () => {
     language: 0.10, // writing quality
     readability: 0.05, // structure and clarity
     fidelity: 0.10, // truthfulness consistency
-    opportunity: 0.10 // missing key achievements
+    opportunity: 0.15 // missing key achievements
   };
 
   // Extract evaluation parameters from request
@@ -103,6 +103,10 @@ const createEvaluationRoutes = () => {
           normalized = result.job_fit_score || 0;
         } else if (criticName === 'fidelity') {
           normalized = result.score || 1.0;
+        } else if (criticName === 'opportunity') {
+          // Opportunity uses 1-5 scale, convert to 0-1
+          const oppScore = result.score || 5;
+          normalized = (oppScore - 1) / 4;
         } else {
           const scoreValue = extractScoreValue(result);
           normalized = normalizeScore(criticName, scoreValue);
@@ -361,6 +365,8 @@ const createEvaluationRoutes = () => {
       // Add fidelity critic if original resume provided
       if (params.original_resume) {
         critics.push(prompts.fidelityCritic(params.job_description, params.resume, params.original_resume));
+        // Add opportunity critic to find missing high-impact achievements
+        critics.push(prompts.opportunityCritic(params.job_description, params.resume, params.original_resume));
       }
 
       // Execute all critics in parallel (same as v1)
@@ -387,7 +393,7 @@ const createEvaluationRoutes = () => {
       );
 
       // Parse results and extract scores
-      const [jobFitResult, keywordResult, readabilityResult, relevanceResult, languageResult, fidelityResult] = results;
+      const [jobFitResult, keywordResult, readabilityResult, relevanceResult, languageResult, fidelityResult, opportunityResult] = results;
 
       // Extract job fit score
       const jobFitScore = jobFitResult?.job_fit_score || 0.0;
@@ -406,6 +412,10 @@ const createEvaluationRoutes = () => {
 
       if (fidelityResult) {
         namedResults.fidelity = fidelityResult;
+      }
+
+      if (opportunityResult) {
+        namedResults.opportunity = opportunityResult;
       }
 
       // Calculate composite score using V2 weights
