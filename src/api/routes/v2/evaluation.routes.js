@@ -6,6 +6,7 @@ const { createLLMClient } = require('../../../llm/client');
 const prompts = require('../../../prompts/prompts');
 const { getConfig } = require('../../../utils/config');
 const { logger } = require('../../../utils/logger');
+const { parseJsonResponse } = require('../../../utils/json-parser');
 
 const createEvaluationRoutes = () => {
   const router = express.Router();
@@ -429,20 +430,13 @@ const createEvaluationRoutes = () => {
           system: critic.systemPrompt,
           user: critic.userPrompt
         }).then(response => {
-          try {
-            // Clean and parse response
-            const cleaned = response
-              .trim()
-              .replace(/^```(?:json)?\s*\n?/, '')
-              .replace(/\n?```\s*$/, '');
-            return JSON.parse(cleaned);
-          } catch (error) {
+          const parsed = parseJsonResponse(response);
+          if (!parsed) {
             logger.error('Failed to parse critic response', {
-              error: error.message,
-              response: response.substring(0, 200)
+              responsePreview: response.substring(0, 200)
             });
-            return null;
           }
+          return parsed;
         }))
       );
 
@@ -654,20 +648,13 @@ const createEvaluationRoutes = () => {
           system: critic.systemPrompt,
           user: critic.userPrompt
         }).then(response => {
-          try {
-            // Clean and parse response
-            const cleaned = response
-              .trim()
-              .replace(/^```(?:json)?\s*\n?/, '')
-              .replace(/\n?```\s*$/, '');
-            return JSON.parse(cleaned);
-          } catch (error) {
+          const parsed = parseJsonResponse(response);
+          if (!parsed) {
             logger.error('Failed to parse critic response', {
-              error: error.message,
-              response: response.substring(0, 200)
+              responsePreview: response.substring(0, 200)
             });
-            return null;
           }
+          return parsed;
         }))
       );
 

@@ -22,14 +22,15 @@ You expertly identify the presence of:
 
 You recognize alternate phrasing and synonyms (e.g., “containerized apps” = Docker, “agile transformation” implies Agile + leadership influence).
 
-You will return a JSON object as follows:
+You will return ONLY a valid JSON object with no comments or additional text:
 {
-  "score": 0.0-1.0,                     // Weighted score (must-haves weigh more)
-  "missing_must_have": [],             // Critical job-specific gaps
-  "missing_nice_to_have": [],          // Secondary skills or preferred extras
-  "present_terms": [],                 // All important matched keywords
-  "suggestions": []                    // Actionable, resume-specific keyword guidance
-}`,
+  "score": 0.0-1.0,
+  "missing_must_have": [],
+  "missing_nice_to_have": [],
+  "present_terms": [],
+  "suggestions": []
+}
+Note: Do NOT include any comments, explanations, or text outside the JSON object.`,
 
     userPrompt: `
 Instructions:
