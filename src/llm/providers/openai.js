@@ -1,5 +1,4 @@
 const OpenAI = require('openai');
-const { curry } = require('ramda');
 const { LLMProviderError } = require('../../utils/errors');
 const { logger } = require('../../utils/logger');
 
@@ -9,7 +8,8 @@ const { logger } = require('../../utils/logger');
  * @param {Object} defaults - Default options
  * @returns {Function} Complete function
  */
-const createOpenAIComplete = curry(async (client, defaults, options) => {
+const createOpenAIComplete = (client, defaults) => async options => {
+  // Return a function that captures client and defaults in its closure
   const startTime = Date.now();
 
   logger.debug('OpenAI: Starting completion request', {
@@ -46,7 +46,11 @@ const createOpenAIComplete = curry(async (client, defaults, options) => {
       { condition: options.responseFormat !== undefined, key: 'response_format', value: options.responseFormat },
       { condition: options.seed !== undefined, key: 'seed', value: options.seed },
       { condition: options.topP !== undefined, key: 'top_p', value: options.topP },
-      { condition: options.frequencyPenalty !== undefined, key: 'frequency_penalty', value: options.frequencyPenalty },
+      {
+        condition: options.frequencyPenalty !== undefined,
+        key: 'frequency_penalty',
+        value: options.frequencyPenalty
+      },
       { condition: options.presencePenalty !== undefined, key: 'presence_penalty', value: options.presencePenalty }
     ].filter(param => param.condition)
       .reduce((acc, param) => ({ ...acc, [param.key]: param.value }), {});
@@ -59,7 +63,7 @@ const createOpenAIComplete = curry(async (client, defaults, options) => {
       maxTokens: finalCompletionOptions.max_tokens,
       temperature: finalCompletionOptions.temperature,
       hasOptionalParams: !!(options.responseFormat || options.seed || options.topP
-                           || options.frequencyPenalty || options.presencePenalty)
+        || options.frequencyPenalty || options.presencePenalty)
     });
 
     const response = await client.chat.completions.create(finalCompletionOptions);
@@ -100,7 +104,7 @@ const createOpenAIComplete = curry(async (client, defaults, options) => {
       error
     );
   }
-});
+};
 
 /**
  * Create OpenAI provider

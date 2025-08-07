@@ -1,5 +1,4 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { curry } = require('ramda');
 const { LLMProviderError } = require('../../utils/errors');
 const { logger } = require('../../utils/logger');
 
@@ -9,7 +8,8 @@ const { logger } = require('../../utils/logger');
  * @param {Object} defaults - Default options
  * @returns {Function} Complete function
  */
-const createGeminiComplete = curry(async (genAI, defaults, options) => {
+const createGeminiComplete = (genAI, defaults) => async options => {
+  // Return a function that captures genAI and defaults in its closure
   const startTime = Date.now();
 
   logger.debug('Gemini: Starting completion request', {
@@ -83,6 +83,7 @@ const createGeminiComplete = curry(async (genAI, defaults, options) => {
 
     // Check for safety or other finish reasons
     if (response.candidates && response.candidates[0]) {
+      // eslint-disable-next-line prefer-destructuring
       const candidate = response.candidates[0];
 
       logger.debug('Gemini: Response candidate info', {
@@ -134,7 +135,7 @@ const createGeminiComplete = curry(async (genAI, defaults, options) => {
       error
     );
   }
-});
+};
 
 /**
  * Create Google Gemini provider

@@ -660,6 +660,44 @@ paths:
         500:
           $ref: '#/components/responses/ServerError'
 
+  /v2/evaluate:
+    post:
+      summary: Evaluate Resume (V2)
+      description: |
+        API v2: Enhanced evaluation endpoint with the same architecture as v1.
+        
+        This endpoint provides:
+        - Same parallel evaluation approach as v1
+        - Individual prompt files for each critic
+        - Easy tuning and maintenance of prompts
+        - Compatible response structure with v1
+        
+        Key features:
+        - Uses the same proven architecture as v1
+        - Maintains individual prompt files for easy customization
+        - Parallel LLM calls for each critic
+        - Consistent with existing evaluation patterns
+      operationId: evaluateResumeV2
+      tags:
+        - V2 Enhanced
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EvaluationRequest'
+      responses:
+        200:
+          description: Batch evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationResponse'
+        400:
+          $ref: '#/components/responses/ValidationError'
+        500:
+          $ref: '#/components/responses/ServerError'
+
   /audit/logs/{audit_id}:
     get:
       summary: Get Audit Log

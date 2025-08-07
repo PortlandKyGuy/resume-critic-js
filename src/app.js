@@ -1,29 +1,20 @@
 const express = require('express');
-const helmet = require('helmet');
-const cors = require('cors');
 const compression = require('compression');
 const { pipe } = require('ramda');
 const { logger } = require('./utils/logger');
 const { getConfig, validateConfig } = require('./utils/config');
 const { errorHandler, notFoundHandler } = require('./api/middleware/error.middleware');
 const { registerRoutes } = require('./api/routes');
-const { setMemoizeMaxSize } = require('./utils/memoizeConfig');
 
 const createApp = () => {
   validateConfig();
 
-  // Configure memoize max size from config
-  const memoizeMaxSize = getConfig('utils.memoize.maxSize', 100);
-  setMemoizeMaxSize(memoizeMaxSize);
-
   const app = express();
 
   const applyMiddleware = appInstance => {
-    appInstance.use(helmet());
-    appInstance.use(cors(getConfig('server.cors')));
     appInstance.use(compression());
-    appInstance.use(express.json({ limit: getConfig('server.bodyLimit', '10mb') }));
-    appInstance.use(express.urlencoded({ extended: true, limit: getConfig('server.bodyLimit', '10mb') }));
+    appInstance.use(express.json({ limit: getConfig('server.bodyLimit', '2mb') }));
+    appInstance.use(express.urlencoded({ extended: true, limit: getConfig('server.bodyLimit', '2mb') }));
 
     appInstance.use((req, res, next) => {
       logger.info({
@@ -65,7 +56,7 @@ const start = async () => {
 
     // eslint-disable-next-line fp/no-mutation
     server = app.listen(port, () => {
-      logger.info(`Server started on port ${port} in ${process.env.NODE_ENV || 'development'} mode`);
+      logger.info(`Server started on port ${port} in ${process.env.NODE_ENV || 'ENV_NOT_SET'} mode`);
     });
 
     const gracefulShutdown = () => {
@@ -79,7 +70,7 @@ const start = async () => {
       setTimeout(() => {
         logger.error('Could not close connections in time, forcefully shutting down');
         process.exit(1);
-      }, 10000);
+      }, 5000);
     };
 
     process.on('SIGTERM', gracefulShutdown);

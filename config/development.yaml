@@ -1,9 +1,10 @@
 server:
-  port: 8000
+  port: 8200
 
 llm:
-  useMock: true
-  provider: mock
+  useMock: false
+  provider: openai
+  model: gpt-4.1-2025-04-14
 
 logging:
   level: debug

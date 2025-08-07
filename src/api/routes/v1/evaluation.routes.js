@@ -2,15 +2,243 @@ const express = require('express');
 const { asyncHandler } = require('../../../utils/errors');
 const { sanitizeRequest } = require('../../middleware/validation.middleware');
 const { createEvaluationValidator } = require('../../validators/evaluation.validators');
+const prompts = require('../../../prompts/prompts');
+const { createLLMClient } = require('../../../llm/client');
 
 const createEvaluationRoutes = () => {
   const router = express.Router();
 
-  // Placeholder handlers - will be implemented later
+  // Scoring weights configuration - equal weights like legacy
+  const DEFAULT_WEIGHTS = {
+    keyword: 1.0,
+    readability: 1.0,
+    relevance: 1.0,
+    language: 1.0
+  };
+
+  // Normalize scores to 0-1 range
+  const normalizeScore = (criticName, score) => {
+    // Handle critics that use 1-5 scale or 0-100 scale
+    if (['relevance', 'language', 'tone', 'personalization', 'related_accomplishments'].includes(criticName)) {
+      if (typeof score === 'number') {
+        if (score >= 1 && score <= 5) {
+          return (score - 1) / 4;
+        }
+        if (score >= 0 && score <= 100) {
+          return score / 100;
+        }
+      }
+      console.warn(`Invalid score format for ${criticName}: ${score}. Defaulting to 0.`);
+      return 0.0;
+    }
+
+    // Handle readability which uses appropriateness_score
+    if (criticName === 'readability') {
+      const appropriatenessScore = score?.appropriateness_score;
+      if (typeof appropriatenessScore === 'number' && appropriatenessScore >= 0 && appropriatenessScore <= 1) {
+        return appropriatenessScore;
+      }
+      console.warn(`Invalid appropriateness_score for readability: ${appropriatenessScore}. Defaulting to 0.`);
+      return 0.0;
+    }
+
+    // Handle bias which uses flags with severity
+    if (criticName === 'bias') {
+      const flags = score?.flags || [];
+      if (!Array.isArray(flags)) {
+        console.warn(`Invalid flags format for bias: ${flags}. Defaulting score to 0.`);
+        return 0.0;
+      }
+
+      const highSeverityCount = flags.filter(flag => flag.severity === 'high').length;
+      const mediumSeverityCount = flags.filter(flag => flag.severity === 'medium').length;
+
+      // Penalize heavily for high severity, moderately for medium
+      const penalty = highSeverityCount * 0.5 + mediumSeverityCount * 0.2;
+      return Math.max(0.0, 1.0 - penalty);
+    }
+
+    // Default case for scores already expected to be 0-1 (keyword, ats)
+    if (typeof score === 'number' && score >= 0 && score <= 1) {
+      return score;
+    }
+
+    // Attempt to get score from a dict if score itself wasn't numeric
+    if (typeof score === 'object' && score !== null) {
+      const scoreValue = score.score;
+      if (typeof scoreValue === 'number' && scoreValue >= 0 && scoreValue <= 1) {
+        return scoreValue;
+      }
+    }
+
+    console.warn(`Invalid score format for ${criticName}: ${score}. Defaulting to 0.`);
+    return 0.0;
+  };
+
+  // Parse LLM response to extract score and full object
+  const parseScoreFromResponse = (response, criticType) => {
+    try {
+      // Log the raw response for debugging
+      console.log(`Raw response for ${criticType}:`, `${response.substring(0, 200)}...`);
+
+      // Clean the response - remove markdown code blocks if present
+      const cleanedResponse = (() => {
+        const trimmed = response.trim();
+        if (trimmed.startsWith('```json')) {
+          return trimmed.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '');
+        }
+        if (trimmed.startsWith('```')) {
+          return trimmed.replace(/^```\s*\n?/, '').replace(/\n?```\s*$/, '');
+        }
+        return trimmed;
+      })();
+
+      // Try to parse as JSON
+      const parsed = JSON.parse(cleanedResponse);
+      return parsed; // Return the full parsed object
+    } catch (error) {
+      // If JSON parsing fails, try to extract JSON from the response
+      console.warn(`Failed to parse JSON for ${criticType}, attempting extraction`);
+      console.warn('Parse error:', error.message);
+
+      // Try to find JSON object in the response
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const extracted = JSON.parse(jsonMatch[0]);
+          console.log(`Successfully extracted JSON for ${criticType}`);
+          return extracted;
+        } catch (e) {
+          console.warn(`Failed to parse extracted JSON for ${criticType}`);
+        }
+      }
+
+      // Last resort - return raw response
+      return response;
+    }
+  };
+
+  // Aggregate scores into composite score
+  const aggregateScores = (results, weights = DEFAULT_WEIGHTS) => {
+    const normalizedScores = {};
+    const rawResults = {};
+
+    // Process each critic result
+    Object.entries(results).forEach(([critic, result]) => {
+      try {
+        const parsedResult = parseScoreFromResponse(result, critic);
+        rawResults[critic] = parsedResult;
+
+        // Extract score for normalization
+        const score = (() => {
+          if (critic === 'readability') {
+            return parsedResult;
+          }
+          if (typeof parsedResult === 'object' && parsedResult !== null) {
+            return parsedResult.score || 0;
+          }
+          return 0;
+        })();
+
+        normalizedScores[critic] = normalizeScore(critic, score);
+      } catch (error) {
+        console.error(`Error processing score for critic '${critic}':`, error);
+      }
+    });
+
+    // Calculate composite score with available critics
+    const availableWeights = Object.entries(weights)
+      .filter(([critic]) => critic in normalizedScores)
+      .reduce((acc, [critic, weight]) => ({ ...acc, [critic]: weight }), {});
+
+    const totalWeight = Object.values(availableWeights).reduce((sum, w) => sum + w, 0);
+
+    const compositeScore = totalWeight > 0
+      ? Object.entries(availableWeights).reduce(
+        (sum, [critic, weight]) => sum + normalizedScores[critic] * (weight / totalWeight),
+        0
+      )
+      : 0;
+
+    return {
+      composite_score: compositeScore,
+      normalized_scores: normalizedScores,
+      raw_results: rawResults
+    };
+  };
+
   const createEvaluationHandler = () => asyncHandler(async (req, res) => {
+    const startTime = Date.now();
+    const {
+      job_description: jobDescription,
+      resume,
+      provider = 'openai',
+      model = 'gpt-4o-mini',
+      temperature = 0.7,
+      process_markdown: processMarkdown = true,
+      max_workers: maxWorkers = 6
+    } = req.body;
+
+    const critics = [
+      { type: 'keyword', ...prompts.keywordCritic(jobDescription, resume) },
+      { type: 'readability', ...prompts.readabilityCritic(jobDescription, resume) },
+      { type: 'relevance', ...prompts.relevanceCritic(jobDescription, resume) },
+      { type: 'language', ...prompts.languageCritic(jobDescription, resume) }
+    ];
+
+    // Get LLM config
+    // eslint-disable-next-line global-require
+    const { getConfig } = require('../../../utils/config');
+    const useMock = getConfig('llm.useMock', false);
+
+    const client = await createLLMClient({
+      provider,
+      model,
+      temperature,
+      useMock
+    });
+
+    // Execute all critics in parallel
+    const results = await Promise.all(
+      critics.map(critic => client.complete({
+        system: critic.systemPrompt,
+        user: critic.userPrompt
+      }))
+    );
+
+    // Map results to critic types
+    const criticResults = {
+      keyword: results[0],
+      readability: results[1],
+      relevance: results[2],
+      language: results[3]
+    };
+
+    // Calculate composite score
+    const scoreResults = aggregateScores(criticResults);
+
+    // Get config for threshold
+    const threshold = getConfig('evaluation.threshold', 0.75);
+
+    // Calculate execution time
+    const executionTime = (Date.now() - startTime) / 1000;
+
+    // Create final response matching legacy format
     res.json({
-      message: 'Evaluation endpoint - to be implemented',
-      data: req.validated
+      composite_score: scoreResults.composite_score,
+      normalized_scores: scoreResults.normalized_scores,
+      raw_results: scoreResults.raw_results,
+      pass: scoreResults.composite_score >= threshold,
+      threshold,
+      jd_file: 'job_description.txt', // Legacy compatibility
+      resume_file: 'resume.txt', // Legacy compatibility
+      llm_provider: client.provider,
+      llm_model: client.model,
+      llm_temperature: temperature,
+      process_markdown: processMarkdown,
+      max_workers: maxWorkers,
+      execution_time: executionTime,
+      version: '0.22.0' // Match legacy version
     });
   });
 

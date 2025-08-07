@@ -1,25 +1,38 @@
 const axios = require('axios');
-const { curry, memoizeWith, identity } = require('ramda');
 const { LLMProviderError } = require('../../utils/errors');
 const { logger } = require('../../utils/logger');
+
+// Simple memoization cache for clients
+const clientCache = new Map();
 
 /**
  * Get memoized Ollama client
  * @param {string} baseURL - Base URL for Ollama
  * @returns {Object} Axios client instance
  */
-const getOllamaClient = memoizeWith(identity, baseURL => {
+const getOllamaClient = baseURL => {
   const url = baseURL || 'http://localhost:11434';
+
+  // Check if client already exists in cache
+  if (clientCache.has(url)) {
+    return clientCache.get(url);
+  }
+
   logger.debug('Ollama: Creating axios client', { baseURL: url });
 
-  return axios.create({
+  const client = axios.create({
     baseURL: url,
     timeout: 60000,
     headers: {
       'Content-Type': 'application/json'
     }
   });
-});
+
+  // Store in cache
+  clientCache.set(url, client);
+
+  return client;
+};
 
 /**
  * Create Ollama complete function
@@ -27,7 +40,8 @@ const getOllamaClient = memoizeWith(identity, baseURL => {
  * @param {Object} defaults - Default options
  * @returns {Function} Complete function
  */
-const createOllamaComplete = curry(async (client, defaults, options) => {
+const createOllamaComplete = (client, defaults) => async options => {
+  // Return a function that captures client and defaults in its closure
   const startTime = Date.now();
 
   logger.debug('Ollama: Starting completion request', {
@@ -128,7 +142,7 @@ const createOllamaComplete = curry(async (client, defaults, options) => {
 
     throw new LLMProviderError(message, 'ollama', error);
   }
-});
+};
 
 /**
  * Create Ollama provider for local LLM
