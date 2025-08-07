@@ -1,4 +1,4 @@
-const opportunityCritic = (jobDescription, coverLetter, resume) => ({
+const coverLetterOpportunityCritic = (jobDescription, coverLetter, resume) => ({
   systemPrompt: `You are a career coach. Given a job description, a cover letter, and a resume, 
             identify 2–3 achievements or experiences from the resume that the cover letter 
             does NOT yet mention but would strongly strengthen the candidate's narrative. 
@@ -16,4 +16,4 @@ ORIGINAL RESUME:
 ${resume}`
 });
 
-module.exports = { opportunityCritic };
+module.exports = { coverLetterOpportunityCritic };

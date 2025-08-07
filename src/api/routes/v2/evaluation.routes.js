@@ -215,11 +215,11 @@ const createEvaluationRoutes = () => {
       // Build all cover letter critics
       const critics = [
         // Core cover letter critics
-        prompts.toneCritic(coverLetter, originalResume),
-        prompts.personalizationCritic(coverLetter, originalResume),
-        prompts.languageCritic(jobDescription, coverLetter),
-        prompts.relevanceCritic(jobDescription, coverLetter),
-        prompts.opportunityCritic(jobDescription, coverLetter, originalResume)
+        prompts.coverLetterToneCritic(coverLetter, originalResume),
+        prompts.coverLetterPersonalizationCritic(coverLetter, originalResume),
+        prompts.coverLetterLanguageCritic(jobDescription, coverLetter),
+        prompts.coverLetterRelevanceCritic(jobDescription, coverLetter),
+        prompts.coverLetterOpportunityCritic(jobDescription, coverLetter, originalResume)
       ];
 
       // Execute all critics in parallel

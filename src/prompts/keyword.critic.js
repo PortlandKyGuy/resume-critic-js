@@ -1,7 +1,7 @@
 const keywordCritic = (jobDescription, resume, requiredTerms = null) => {
   const requiredTermsGuidance = requiredTerms
     ? `REQUIRED TERMS (provided):\n${requiredTerms}`
-    : "REQUIRED TERMS: Please infer essential and preferred keywords, technologies, and leadership competencies based on the Job Description. Adapt expectations to match the role level (e.g., Senior Engineer vs. Senior Director vs. VP).";
+    : 'REQUIRED TERMS: Please infer essential and preferred keywords, technologies, and leadership competencies based on the Job Description. Adapt expectations to match the role level (e.g., Senior Engineer vs. Senior Director vs. VP).';
 
   return {
     systemPrompt: `You are a senior technical recruiter and engineering hiring specialist. You assess how well a resume matches a Software Engineering job description, covering a range of seniority from Senior Engineer to VP of Engineering.

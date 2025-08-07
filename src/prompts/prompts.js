@@ -4,10 +4,14 @@ const { languageCritic } = require('./language.critic');
 const { readabilityCritic } = require('./readability.critic');
 const { comparisonCritic } = require('./comparison.critic');
 const { relatedAccomplishmentsCritic } = require('./relatedAccomplishments.critic');
-const { toneCritic } = require('./tone.critic');
-const { personalizationCritic } = require('./personalization.critic');
-const { opportunityCritic } = require('./opportunity.critic');
+const { coverLetterToneCritic } = require('./coverLetterTone.critic');
+const { coverLetterPersonalizationCritic } = require('./coverLetterPersonalization.critic');
+const { coverLetterOpportunityCritic } = require('./coverLetterOpportunity.critic');
 const { coverLetterFidelityCritic } = require('./fidelity.critic');
+const { coverLetterLanguageCritic } = require('./coverLetterLanguage.critic');
+const { coverLetterRelevanceCritic } = require('./coverLetterRelevance.critic');
+const { coverLetterKeywordCritic } = require('./coverLetterKeyword.critic');
+const { coverLetterReadabilityCritic } = require('./coverLetterReadability.critic');
 
 module.exports = {
   keywordCritic,
@@ -16,8 +20,12 @@ module.exports = {
   readabilityCritic,
   comparisonCritic,
   relatedAccomplishmentsCritic,
-  toneCritic,
-  personalizationCritic,
-  opportunityCritic,
-  coverLetterFidelityCritic
+  coverLetterToneCritic,
+  coverLetterPersonalizationCritic,
+  coverLetterOpportunityCritic,
+  coverLetterFidelityCritic,
+  coverLetterLanguageCritic,
+  coverLetterRelevanceCritic,
+  coverLetterKeywordCritic,
+  coverLetterReadabilityCritic
 };
