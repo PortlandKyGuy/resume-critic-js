@@ -310,6 +310,25 @@ const createEvaluationRoutes = () => {
     return strengths;
   };
 
+  // Identify fidelity risks based on scores
+  const identifyFidelityRisks = (jobFit, fidelity) => {
+    const risks = [];
+
+    if (jobFit < 0.4 && fidelity < 0.95) {
+      risks.push('Low job fit increases risk of fabrication');
+    }
+
+    if (fidelity < 0.9) {
+      risks.push('Some claims may need verification');
+    }
+
+    if (jobFit < 0.6 && fidelity < 0.85) {
+      risks.push('Significant mismatch - improvements may compromise truthfulness');
+    }
+
+    return risks.length > 0 ? risks : ['No fidelity risks identified'];
+  };
+
   // Determine specific areas to focus improvement efforts
   const getImprovementFocus = (jobFit, quality, results) => {
     const focusAreas = [];
@@ -535,6 +554,12 @@ const createEvaluationRoutes = () => {
           improvement_areas: identifyQualityGaps(namedResults),
           strengths: identifyStrengths(namedResults, normalizedScores),
           priority_actions: getImprovementFocus(jobFitScore, qualityScore, namedResults)
+        },
+        details: {
+          fit_analysis: jobFitResult?.fit_summary || '',
+          quality_gaps: identifyQualityGaps(namedResults),
+          improvement_focus: getImprovementFocus(jobFitScore, qualityScore, namedResults),
+          fidelity_risk_factors: identifyFidelityRisks(jobFitScore, fidelityScore)
         },
         normalized_scores: normalizedScores,
         raw_results: rawResults,
