@@ -479,6 +479,25 @@ const createEvaluationRoutes = () => {
       const qualityResults = [keywordResult, readabilityResult, relevanceResult, languageResult];
       const { composite_score: qualityScore } = aggregateScores(qualityResults, DEFAULT_WEIGHTS);
 
+      // Calculate opportunity score and extract suggestions
+      let opportunityScore = null;
+      let enhancementSuggestions = null;
+
+      if (opportunityResult) {
+        const rawOppScore = opportunityResult.score;
+        if (typeof rawOppScore === 'number' && rawOppScore >= 1 && rawOppScore <= 5) {
+          opportunityScore = (rawOppScore - 1) / 4;
+        } else {
+          opportunityScore = 1.0;
+        }
+
+        enhancementSuggestions = opportunityResult.suggestions || [];
+        // If opportunity score is perfect, drop suggestions
+        if (opportunityScore >= 1.0) {
+          enhancementSuggestions = null;
+        }
+      }
+
       // Determine improvement recommendation
       const recommendation = determineImprovementRecommendation(
         jobFitScore,
@@ -511,6 +530,8 @@ const createEvaluationRoutes = () => {
         normalized_scores: normalizedScores,
         raw_results: rawResults,
         extracted_keywords: requiredTerms,
+        enhancement_suggestions: enhancementSuggestions,
+        opportunity_score: opportunityScore !== null ? Math.round(opportunityScore * 100) / 100 : null,
         pass: compositeScore >= threshold,
         threshold,
         jd_file: 'job_description.txt',
