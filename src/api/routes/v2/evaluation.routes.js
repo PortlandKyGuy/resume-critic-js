@@ -17,6 +17,17 @@ const createEvaluationRoutes = () => {
     language: 1.0
   };
 
+  // V2 weights including job fit and fidelity
+  const V2_WEIGHTS = {
+    job_fit: 0.20, // fundamental compatibility
+    relevance: 0.20, // alignment with requirements
+    keyword: 0.20, // important terms coverage
+    language: 0.10, // writing quality
+    readability: 0.05, // structure and clarity
+    fidelity: 0.10, // truthfulness consistency
+    opportunity: 0.10 // missing key achievements
+  };
+
   // Extract evaluation parameters from request
   const extractEvaluationParams = body => (
     ({
@@ -73,7 +84,47 @@ const createEvaluationRoutes = () => {
     return criticResult;
   };
 
-  // Aggregate scores and calculate composite
+  // Aggregate scores and calculate composite - v2 version with named results
+  const aggregateScoresV2 = (namedResults, weights) => {
+    const normalizedScores = {};
+    const rawResults = {};
+    let weightedSum = 0;
+    let totalWeight = 0;
+
+    Object.entries(namedResults).forEach(([criticName, result]) => {
+      if (result && weights[criticName]) {
+        // Store raw result
+        rawResults[criticName] = result;
+
+        // Normalize score based on critic type
+        let normalized = 0;
+        if (criticName === 'job_fit') {
+          normalized = result.job_fit_score || 0;
+        } else if (criticName === 'fidelity') {
+          normalized = result.score || 1.0;
+        } else {
+          const scoreValue = extractScoreValue(result);
+          normalized = normalizeScore(criticName, scoreValue);
+        }
+
+        normalizedScores[criticName] = normalized;
+
+        // Add to weighted sum
+        weightedSum += normalized * weights[criticName];
+        totalWeight += weights[criticName];
+      }
+    });
+
+    const compositeScore = totalWeight > 0 ? weightedSum / totalWeight : 0;
+
+    return {
+      composite_score: compositeScore,
+      normalized_scores: normalizedScores,
+      raw_results: rawResults
+    };
+  };
+
+  // Original aggregate scores for backward compatibility
   const aggregateScores = (results, weights) => {
     const normalizedScores = {};
     const rawResults = {};
@@ -110,6 +161,167 @@ const createEvaluationRoutes = () => {
     };
   };
 
+  // Determine improvement recommendation based on scores
+  const determineImprovementRecommendation = (jobFit, quality, composite, fidelity) => {
+    // Fidelity gate: prevent further changes if truthfulness risk is high
+    const fidelityThreshold = jobFit > 0.6 ? 0.85 : 0.90;
+    if (fidelity < fidelityThreshold) {
+      const stopReason = jobFit < 0.4 ? 'low_fit_fidelity_risk' : 'low_fidelity_risk';
+      return {
+        should_improve: false,
+        strategy: null,
+        stop_reason: stopReason
+      };
+    }
+
+    // GATE: Poor fit with fidelity risk (<0.95)
+    if (jobFit < 0.4 && fidelity < 0.95) {
+      return {
+        should_improve: false,
+        strategy: null,
+        stop_reason: 'low_fit_fidelity_risk'
+      };
+    }
+
+    // GATE: Already optimized (no further meaningful gains)
+    if (quality >= 0.85 && composite >= 0.9) {
+      return {
+        should_improve: false,
+        strategy: null,
+        stop_reason: 'already_optimized'
+      };
+    }
+
+    // Determine strategy based on fit and quality
+    if (jobFit >= 0.7 && quality < 0.7) {
+      return {
+        should_improve: true,
+        strategy: 'major_quality_improvements',
+        max_achievable: Math.min(0.95, jobFit + 0.1)
+      };
+    } if (jobFit >= 0.4) {
+      return {
+        should_improve: true,
+        strategy: 'focus_transferable_skills',
+        max_achievable: jobFit * 0.9
+      };
+    }
+    // Very low job fit but passed fidelity gates
+    return {
+      should_improve: true,
+      strategy: 'minimal_adjustments_only',
+      max_achievable: jobFit * 0.8
+    };
+  };
+
+  // Identify specific quality issues from critic results
+  const identifyQualityGaps = results => {
+    const gaps = [];
+
+    // Check language critic
+    if (results.language) {
+      const languageScore = normalizeScore('language', extractScoreValue(results.language));
+      if (languageScore < 0.8) {
+        gaps.push('Grammar and spelling issues detected');
+      }
+    }
+
+    // Check readability
+    if (results.readability) {
+      const readabilityScore = normalizeScore('readability', extractScoreValue(results.readability));
+      if (readabilityScore < 0.7) {
+        gaps.push('Complex sentence structure affecting readability');
+      }
+    }
+
+    // Check keyword coverage
+    if (results.keyword) {
+      const keywordScore = normalizeScore('keyword', extractScoreValue(results.keyword));
+      if (keywordScore < 0.6) {
+        gaps.push('Missing important keywords from job description');
+      }
+    }
+
+    // Check relevance
+    if (results.relevance) {
+      const relevanceScore = normalizeScore('relevance', extractScoreValue(results.relevance));
+      if (relevanceScore < 0.7) {
+        gaps.push('Weak alignment with job requirements');
+      }
+    }
+
+    return gaps.length > 0 ? gaps : ['No significant quality gaps identified'];
+  };
+
+  // Identify strengths from critic results
+  const identifyStrengths = (results, normalizedScores) => {
+    const strengths = [];
+
+    if (normalizedScores.job_fit >= 0.8) {
+      strengths.push({
+        area: 'Job Fit',
+        score: normalizedScores.job_fit,
+        impact: 'high'
+      });
+    }
+
+    if (normalizedScores.relevance >= 0.8) {
+      strengths.push({
+        area: 'Relevance',
+        score: normalizedScores.relevance,
+        impact: 'high'
+      });
+    }
+
+    if (normalizedScores.keyword >= 0.8) {
+      strengths.push({
+        area: 'Keywords',
+        score: normalizedScores.keyword,
+        impact: 'medium'
+      });
+    }
+
+    if (normalizedScores.language >= 0.9) {
+      strengths.push({
+        area: 'Language Quality',
+        score: normalizedScores.language,
+        impact: 'medium'
+      });
+    }
+
+    return strengths;
+  };
+
+  // Determine specific areas to focus improvement efforts
+  const getImprovementFocus = (jobFit, quality, results) => {
+    const focusAreas = [];
+
+    if (jobFit >= 0.7) {
+      // Good fit, focus on quality improvements
+      if (results.keyword && normalizeScore('keyword', extractScoreValue(results.keyword)) < 0.8) {
+        focusAreas.push('Add more relevant keywords and technical terms');
+      }
+      if (results.language && normalizeScore('language', extractScoreValue(results.language)) < 0.8) {
+        focusAreas.push('Improve grammar and professional language');
+      }
+      if (quality < 0.7) {
+        focusAreas.push('Quantify achievements and impact');
+        focusAreas.push('Use stronger action verbs');
+      }
+    } else if (jobFit >= 0.4) {
+      // Medium fit, focus on transferable skills
+      focusAreas.push('Highlight transferable skills and experiences');
+      focusAreas.push('Emphasize relevant accomplishments');
+      focusAreas.push('Bridge skill gaps with related experience');
+    } else {
+      // Poor fit, minimal changes only
+      focusAreas.push('Minor formatting and clarity improvements only');
+      focusAreas.push('Avoid adding unrelated experience');
+    }
+
+    return focusAreas.length > 0 ? focusAreas : ['Resume is well-optimized'];
+  };
+
   // Main evaluation handler
   const createEvaluationHandler = () => asyncHandler(async (req, res) => {
     const startTime = Date.now();
@@ -126,13 +338,17 @@ const createEvaluationRoutes = () => {
 
       // Build all critic prompts
       const critics = [
-        prompts.jobFitScore(params.job_description, params.resume),
+        prompts.jobFitCritic(params.job_description, params.resume),
         prompts.keywordCritic(params.job_description, params.resume),
         prompts.readabilityCritic(params.job_description, params.resume),
         prompts.relevanceCritic(params.job_description, params.resume),
-        prompts.languageCritic(params.job_description, params.resume),
-        prompts.fidelityCritic(params.job_description, params.resume, params.original_resume)
+        prompts.languageCritic(params.job_description, params.resume)
       ];
+
+      // Add fidelity critic if original resume provided
+      if (params.original_resume) {
+        critics.push(prompts.fidelityCritic(params.job_description, params.resume, params.original_resume));
+      }
 
       // Execute all critics in parallel (same as v1)
       const results = await Promise.all(
@@ -157,14 +373,75 @@ const createEvaluationRoutes = () => {
         }))
       );
 
-      // Aggregate results
-      const threshold = getConfig('evaluation.threshold', 0.75);
-      const { composite_score: compositeScore, normalized_scores: normalizedScores, raw_results: rawResults } = aggregateScores(results, DEFAULT_WEIGHTS);
+      // Parse results and extract scores
+      const [jobFitResult, keywordResult, readabilityResult, relevanceResult, languageResult, fidelityResult] = results;
 
-      // Build response
+      // Extract job fit score
+      const jobFitScore = jobFitResult?.job_fit_score || 0.0;
+
+      // Calculate fidelity score
+      const fidelityScore = fidelityResult ? (fidelityResult.score || 1.0) : 1.0;
+
+      // Map results to named structure
+      const namedResults = {
+        job_fit: jobFitResult,
+        keyword: keywordResult,
+        readability: readabilityResult,
+        relevance: relevanceResult,
+        language: languageResult
+      };
+
+      if (fidelityResult) {
+        namedResults.fidelity = fidelityResult;
+      }
+
+      // Calculate composite score using V2 weights
+      const v2Weights = params.original_resume ? V2_WEIGHTS : {
+        job_fit: 0.25,
+        relevance: 0.25,
+        keyword: 0.25,
+        language: 0.15,
+        readability: 0.10
+      };
+
+      const { composite_score: compositeScore, normalized_scores: normalizedScores, raw_results: rawResults } = aggregateScoresV2(
+        namedResults,
+        v2Weights
+      );
+
+      // Calculate quality score (excluding job fit and fidelity)
+      const qualityResults = [keywordResult, readabilityResult, relevanceResult, languageResult];
+      const { composite_score: qualityScore } = aggregateScores(qualityResults, DEFAULT_WEIGHTS);
+
+      // Determine improvement recommendation
+      const recommendation = determineImprovementRecommendation(
+        jobFitScore,
+        qualityScore,
+        compositeScore,
+        fidelityScore
+      );
+
+      // Build v2 response
+      const threshold = getConfig('evaluation.threshold', 0.75);
       const executionTime = (Date.now() - startTime) / 1000;
+
       const response = {
         composite_score: compositeScore,
+        job_fit_score: jobFitScore,
+        quality_score: qualityScore,
+        fidelity_score: fidelityScore,
+        should_improve: recommendation.should_improve,
+        improvement_strategy: recommendation.strategy,
+        max_achievable_score: recommendation.max_achievable || null,
+        stop_reason: recommendation.stop_reason || null,
+        recommendations: {
+          overall_strategy: recommendation.strategy
+            ? `Focus on ${recommendation.strategy.replace(/_/g, ' ')}`
+            : 'Resume is well-optimized',
+          improvement_areas: identifyQualityGaps(namedResults),
+          strengths: identifyStrengths(namedResults, normalizedScores),
+          priority_actions: getImprovementFocus(jobFitScore, qualityScore, namedResults)
+        },
         normalized_scores: normalizedScores,
         raw_results: rawResults,
         pass: compositeScore >= threshold,
