@@ -7,16 +7,25 @@ const { logger } = require('../../utils/logger');
 const { parseJsonResponse } = require('../../utils/json-parser');
 
 // Pure function to extract job fit parameters
-const extractJobFitParams = body => ({
-  job_description: body.job_description,
-  resume: body.resume,
-  original_resume: body.original_resume || null,
-  provider: body.provider || getConfig('llm.provider', 'openai'),
-  model: body.model || getConfig('llm.model', 'gpt-4o-mini'),
-  temperature: body.temperature || getConfig('llm.temperature', 0.7),
-  topP: body.top_p || getConfig('llm.top_p', 1),
-  process_markdown: body.process_markdown !== false
-});
+const extractJobFitParams = body => {
+  const params = {
+    job_description: body.job_description,
+    resume: body.resume,
+    original_resume: body.original_resume || null,
+    provider: body.provider || getConfig('llm.provider', 'openai'),
+    model: body.model || getConfig('llm.model', 'gpt-4o-mini'),
+    temperature: body.temperature || getConfig('llm.temperature', 0.7),
+    process_markdown: body.process_markdown !== false
+  };
+
+  // Only add topP if it's explicitly provided in body or config
+  const topP = body.top_p !== undefined ? body.top_p : getConfig('llm.top_p');
+  if (topP !== undefined) {
+    params.topP = topP;
+  }
+
+  return params;
+};
 
 // Pure function to determine improvement recommendation
 const determineImprovementRecommendation = jobFitScore => {

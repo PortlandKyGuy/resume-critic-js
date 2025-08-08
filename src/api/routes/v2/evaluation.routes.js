@@ -46,8 +46,8 @@ const createEvaluationRoutes = () => {
   };
 
   // Extract evaluation parameters from request
-  const extractEvaluationParams = body => (
-    ({
+  const extractEvaluationParams = body => {
+    const params = {
       job_description: body.job_description,
       resume: body.resume,
       original_resume: body.original_resume || null,
@@ -55,12 +55,19 @@ const createEvaluationRoutes = () => {
       provider: body.provider || getConfig('llm.provider', 'openai'),
       model: body.model || getConfig('llm.model', 'gpt-4o-mini'),
       temperature: body.temperature || getConfig('llm.temperature', 0.7),
-      topP: body.top_p || getConfig('llm.top_p', 1),
       process_markdown: body.process_markdown !== false,
       max_workers: body.max_workers || 6,
       job_fit_score: body.job_fit_score !== undefined ? body.job_fit_score : null
-    })
-  );
+    };
+
+    // Only add topP if it's explicitly provided in body or config
+    const topP = body.top_p !== undefined ? body.top_p : getConfig('llm.top_p');
+    if (topP !== undefined) {
+      params.topP = topP;
+    }
+
+    return params;
+  };
 
   // Normalize scores to 0-1 range
   const normalizeScore = (criticName, score) => {
@@ -643,18 +650,26 @@ const createEvaluationRoutes = () => {
       provider = getConfig('llm.provider', 'openai'),
       model = getConfig('llm.model', 'gpt-4o-mini'),
       temperature = getConfig('llm.temperature', 0.7),
-      top_p: topP = getConfig('llm.top_p', 1)
+      top_p: topP
     } = req.body;
+
+    // Only use topP if explicitly provided in body or config
+    const topPValue = topP !== undefined ? topP : getConfig('llm.top_p');
 
     try {
       // Create LLM client
-      const client = await createLLMClient({
+      const clientOptions = {
         provider,
         model,
         temperature,
-        topP,
         useMock: getConfig('llm.useMock', false)
-      });
+      };
+
+      if (topPValue !== undefined) {
+        clientOptions.topP = topPValue;
+      }
+
+      const client = await createLLMClient(clientOptions);
 
       // Build all cover letter critics
       const critics = [

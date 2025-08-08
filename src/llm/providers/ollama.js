@@ -69,13 +69,15 @@ const createOllamaComplete = (client, defaults) => async options => {
       stream: false,
       options: {
         temperature: options.temperature !== undefined ? options.temperature : defaults.temperature,
-        num_predict: options.maxTokens || defaults.maxTokens,
-        top_p: options.topP,
-        top_k: options.topK,
-        seed: options.seed,
-        repeat_penalty: options.repeatPenalty
+        num_predict: options.maxTokens || defaults.maxTokens
       }
     };
+
+    // Only add optional parameters if they are provided
+    if (options.topP !== undefined) requestData.options.top_p = options.topP;
+    if (options.topK !== undefined) requestData.options.top_k = options.topK;
+    if (options.seed !== undefined) requestData.options.seed = options.seed;
+    if (options.repeatPenalty !== undefined) requestData.options.repeat_penalty = options.repeatPenalty;
 
     logger.debug('Ollama: Sending request', {
       model: requestData.model,

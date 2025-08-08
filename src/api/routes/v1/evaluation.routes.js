@@ -178,10 +178,13 @@ const createEvaluationRoutes = () => {
       provider = getConfig('llm.provider', 'openai'),
       model = getConfig('llm.model', 'gpt-4o-mini'),
       temperature = getConfig('llm.temperature', 0.7),
-      top_p: topP = getConfig('llm.top_p', 1),
+      top_p: topP,
       process_markdown: processMarkdown = true,
       max_workers: maxWorkers = 6
     } = req.body;
+
+    // Only use topP if explicitly provided in body or config
+    const topPValue = topP !== undefined ? topP : getConfig('llm.top_p');
 
     const critics = [
       { type: 'keyword', ...prompts.keywordCritic(jobDescription, resume) },
@@ -193,13 +196,18 @@ const createEvaluationRoutes = () => {
     // Get LLM config
     const useMock = getConfig('llm.useMock', false);
 
-    const client = await createLLMClient({
+    const clientOptions = {
       provider,
       model,
       temperature,
-      topP,
       useMock
-    });
+    };
+
+    if (topPValue !== undefined) {
+      clientOptions.topP = topPValue;
+    }
+
+    const client = await createLLMClient(clientOptions);
 
     // Execute all critics in parallel
     const results = await Promise.all(
@@ -238,7 +246,7 @@ const createEvaluationRoutes = () => {
       llm_provider: client.provider,
       llm_model: client.model,
       llm_temperature: temperature,
-      llm_top_p: topP,
+      llm_top_p: topPValue,
       process_markdown: processMarkdown,
       max_workers: maxWorkers,
       execution_time: executionTime,
