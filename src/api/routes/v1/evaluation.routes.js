@@ -178,6 +178,7 @@ const createEvaluationRoutes = () => {
       provider = getConfig('llm.provider', 'openai'),
       model = getConfig('llm.model', 'gpt-4o-mini'),
       temperature = getConfig('llm.temperature', 0.7),
+      top_p: topP = getConfig('llm.top_p', 1),
       process_markdown: processMarkdown = true,
       max_workers: maxWorkers = 6
     } = req.body;
@@ -196,6 +197,7 @@ const createEvaluationRoutes = () => {
       provider,
       model,
       temperature,
+      topP,
       useMock
     });
 
@@ -236,6 +238,7 @@ const createEvaluationRoutes = () => {
       llm_provider: client.provider,
       llm_model: client.model,
       llm_temperature: temperature,
+      llm_top_p: topP,
       process_markdown: processMarkdown,
       max_workers: maxWorkers,
       execution_time: executionTime,

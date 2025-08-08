@@ -5,6 +5,7 @@ llm:
   useMock: true
   provider: mock
   temperature: 0.1
+  top_p: 1
 
 logging:
   level: error

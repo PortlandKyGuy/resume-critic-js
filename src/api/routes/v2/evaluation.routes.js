@@ -55,6 +55,7 @@ const createEvaluationRoutes = () => {
       provider: body.provider || getConfig('llm.provider', 'openai'),
       model: body.model || getConfig('llm.model', 'gpt-4o-mini'),
       temperature: body.temperature || getConfig('llm.temperature', 0.7),
+      topP: body.top_p || getConfig('llm.top_p', 1),
       process_markdown: body.process_markdown !== false,
       max_workers: body.max_workers || 6,
       job_fit_score: body.job_fit_score !== undefined ? body.job_fit_score : null
@@ -375,6 +376,7 @@ const createEvaluationRoutes = () => {
         provider: params.provider,
         model: params.model,
         temperature: params.temperature,
+        topP: params.topP,
         useMock: getConfig('llm.useMock', false)
       });
 
@@ -640,7 +642,8 @@ const createEvaluationRoutes = () => {
       cover_letter: coverLetter,
       provider = getConfig('llm.provider', 'openai'),
       model = getConfig('llm.model', 'gpt-4o-mini'),
-      temperature = 0.1
+      temperature = getConfig('llm.temperature', 0.7),
+      top_p: topP = getConfig('llm.top_p', 1)
     } = req.body;
 
     try {
@@ -649,6 +652,7 @@ const createEvaluationRoutes = () => {
         provider,
         model,
         temperature,
+        topP,
         useMock: getConfig('llm.useMock', false)
       });
 

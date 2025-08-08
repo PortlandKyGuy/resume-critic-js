@@ -14,6 +14,7 @@ const extractJobFitParams = body => ({
   provider: body.provider || getConfig('llm.provider', 'openai'),
   model: body.model || getConfig('llm.model', 'gpt-4o-mini'),
   temperature: body.temperature || getConfig('llm.temperature', 0.7),
+  topP: body.top_p || getConfig('llm.top_p', 1),
   process_markdown: body.process_markdown !== false
 });
 
@@ -136,6 +137,7 @@ const evaluateJobFit = pipeAsync(
       provider: params.provider,
       model: params.model,
       temperature: params.temperature,
+      topP: params.topP,
       useMock: getConfig('llm.useMock', false)
     });
     return { ...params, client };
