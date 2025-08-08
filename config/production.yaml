@@ -9,6 +9,7 @@ llm:
   useMock: false
   provider: openai
   model: gpt-4
+  temperature: 0.1
 
 logging:
   level: info

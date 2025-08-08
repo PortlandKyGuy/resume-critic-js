@@ -4,6 +4,7 @@ server:
 llm:
   useMock: true
   provider: mock
+  temperature: 0.1
 
 logging:
   level: error

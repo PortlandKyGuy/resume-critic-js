@@ -5,6 +5,7 @@ llm:
   useMock: false
   provider: openai
   model: gpt-4.1-2025-04-14
+  temperature: 0.1
 
 logging:
   level: debug
