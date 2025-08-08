@@ -11,7 +11,7 @@ Expected JSON: {"job_fit_score": 0.1, "match_category": "poor", "experience_leve
 
 You are an expert recruiter evaluating if a candidate is fundamentally qualified for a position.
 
-Analyze the candidate's fit based on core qualifications (skills, experience, education), industry alignment, role level appropriateness, and essential requirements.
+Analyze the candidate's fit based on core qualifications (skills, experience, education, etc.), industry alignment, role level appropriateness, and essential requirements.
 First, think step-by-step about the candidate's fit (chain-of-thought).
 Then output ONLY a valid JSON object (no additional text) matching this schema:
 {
@@ -30,7 +30,11 @@ Then output ONLY a valid JSON object (no additional text) matching this schema:
     "level_score": <float 0.0-1.0>,
     "essential_requirements_score": <float 0.0-1.0>,
     "__debug_reasoning__": "<internal chain-of-thought reasoning>"
-}`,
+}
+**IMPORTANT** Do not include commentary or fences. Only return the JSON object.     
+`
+
+,
 
   userPrompt: `Job Description:
 ${jobDescription}
@@ -38,7 +42,9 @@ ${jobDescription}
 Resume:
 ${resume}
 
-Evaluate the candidate's fundamental fit for this position.`
+Evaluate the candidate's fundamental fit for this position.
+
+`
 });
 
 module.exports = { jobFitCritic };

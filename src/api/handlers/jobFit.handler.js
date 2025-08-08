@@ -1,4 +1,3 @@
-const { curry } = require('ramda');
 const { pipeAsync } = require('../../utils/functional');
 const { asyncHandler } = require('../../utils/errors');
 const { createLLMClient } = require('../../llm/client');
@@ -19,7 +18,7 @@ const extractJobFitParams = body => ({
 });
 
 // Pure function to determine improvement recommendation
-const determineImprovementRecommendation = curry(jobFitScore => {
+const determineImprovementRecommendation = jobFitScore => {
   if (jobFitScore >= 0.8) {
     return {
       should_improve: false,
@@ -49,10 +48,10 @@ const determineImprovementRecommendation = curry(jobFitScore => {
     improvement_strategy: 'major_restructuring_required',
     improvement_potential: 'low'
   };
-});
+};
 
 // Pure function to generate recommendations based on gaps and strengths
-const generateRecommendations = curry((keyGaps, transferableStrengths, jobFitScore) => {
+const generateRecommendations = (keyGaps, transferableStrengths, jobFitScore) => {
   const recommendations = [];
 
   if (jobFitScore >= 0.8) {
@@ -83,10 +82,10 @@ const generateRecommendations = curry((keyGaps, transferableStrengths, jobFitSco
   }
 
   return recommendations;
-});
+};
 
 // Pure function to build response
-const buildJobFitResponse = curry((result, recommendation, recommendations, executionTime, clientInfo, processMarkdown) => ({
+const buildJobFitResponse = (result, recommendation, recommendations, executionTime, clientInfo, processMarkdown) => ({
   // Core job fit results
   job_fit_score: result.job_fit_score,
   match_category: result.match_category,
@@ -127,7 +126,7 @@ const buildJobFitResponse = curry((result, recommendation, recommendations, exec
   process_markdown: processMarkdown,
   version: getConfig('version', '0.22.0'),
   api_version: 'v2'
-}));
+});
 
 // Composed async pipeline for job fit evaluation
 const evaluateJobFit = pipeAsync(
@@ -188,9 +187,7 @@ const evaluateJobFit = pipeAsync(
 
   // Step 5: Determine improvement recommendation
   async ({ result, ...rest }) => {
-    const recommendation = determineImprovementRecommendation(
-      result.job_fit_score
-    );
+    const recommendation = determineImprovementRecommendation(result.job_fit_score);
     return { ...rest, result, recommendation };
   },
 
